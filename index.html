@@ -1,0 +1,403 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Edilizia Verificata - Trova Imprese Edili di Fiducia</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body class="text-gray-800">
+    <header class="bg-white shadow-md sticky top-0 z-50">
+        <nav class="container mx-auto px-6 py-4 flex justify-between items-center">
+            <a href="#" class="text-2xl font-bold text-blue-600" data-page="home">
+                <i class="fas fa-hard-hat mr-2"></i>Edilizia Verificata
+            </a>
+            <div class="hidden md:flex items-center space-x-6">
+                <a href="#" class="text-gray-600 hover:text-blue-600" data-page="home">Home</a>
+                <a href="#" class="text-gray-600 hover:text-blue-600" data-page="how-it-works">Come Funziona</a>
+                <a href="#" class="text-gray-600 hover:text-blue-600" data-page="register-company">Sei un'impresa?</a>
+            </div>
+            <div class="flex items-center space-x-4" id="auth-actions">
+                <button id="login-button" class="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50" data-page="login">Accedi</button>
+                <button id="register-user-button" class="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700" data-page="register-user">Registrati</button>
+                <div id="user-menu" class="hidden items-center space-x-3">
+                    <div class="text-right leading-tight">
+                        <p id="user-menu-name" class="text-sm font-semibold text-gray-700"></p>
+                        <p id="user-menu-role" class="text-xs text-gray-500"></p>
+                    </div>
+                    <button id="logout-btn" class="px-3 py-2 text-sm font-medium text-white bg-slate-700 rounded-lg hover:bg-slate-800">Esci</button>
+                </div>
+                <button class="hidden px-4 py-2 text-sm font-medium text-white bg-red-600 rounded-lg hover:bg-red-700" id="admin-btn" data-page="admin-dashboard">Admin</button>
+            </div>
+        </nav>
+    </header>
+
+    <div id="session-banner" class="hidden bg-blue-50 border-b border-blue-100">
+        <div class="container mx-auto px-6 py-3">
+            <p id="session-banner-text" class="text-sm text-blue-700"></p>
+        </div>
+    </div>
+
+    <main>
+        <div id="page-home" class="page active">
+            <div class="hero-section text-white">
+                <div class="container mx-auto px-6 py-24 text-center">
+                    <h1 class="text-4xl md:text-5xl font-bold mb-4">Trova la migliore impresa edile. Verificata.</h1>
+                    <p class="text-lg text-gray-200 max-w-2xl mx-auto mb-6">Connettiamo i tuoi progetti con professionisti di fiducia, la cui affidabilità è garantita da documenti e sopralluoghi tecnici.</p>
+                    <form id="hero-search-form" class="max-w-3xl mx-auto">
+                        <div class="flex flex-col md:flex-row gap-2 bg-white/20 backdrop-blur-sm p-2 rounded-lg">
+                            <input id="search-job-input" type="text" placeholder="Tipo di lavoro (es. ristrutturazione bagno)" class="w-full p-3 border border-gray-400 bg-white/90 text-gray-800 rounded-md focus:ring-2 focus:ring-blue-400 focus:outline-none">
+                            <select id="search-region-select" class="w-full md:w-2/3 p-3 border border-gray-400 bg-white/90 text-gray-800 rounded-md focus:ring-2 focus:ring-blue-400 focus:outline-none">
+                                <option value="">Scegli la Regione</option>
+                                <option>Abruzzo</option>
+                                <option>Basilicata</option>
+                                <option>Calabria</option>
+                                <option>Campania</option>
+                                <option>Emilia-Romagna</option>
+                                <option>Friuli-Venezia Giulia</option>
+                                <option>Lazio</option>
+                                <option>Liguria</option>
+                                <option>Lombardia</option>
+                                <option>Marche</option>
+                                <option>Molise</option>
+                                <option>Piemonte</option>
+                                <option>Puglia</option>
+                                <option>Sardegna</option>
+                                <option>Sicilia</option>
+                                <option>Toscana</option>
+                                <option>Trentino-Alto Adige</option>
+                                <option>Umbria</option>
+                                <option>Valle d'Aosta</option>
+                                <option>Veneto</option>
+                            </select>
+                            <button class="w-full md:w-auto px-8 py-3 bg-blue-600 text-white font-semibold rounded-md hover:bg-blue-700 transition" type="submit">
+                                <i class="fas fa-search mr-2"></i>Cerca
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+
+            <div class="container mx-auto p-4 md:p-8">
+                <section class="mb-12">
+                    <h2 class="text-3xl font-bold mb-6 text-center">La Piattaforma di cui ti Puoi Fidare</h2>
+                    <div class="grid md:grid-cols-3 gap-8 text-center">
+                        <div class="bg-white p-6 rounded-lg shadow-sm">
+                            <i class="fas fa-check-double text-4xl text-green-500 mb-3"></i>
+                            <h3 class="text-xl font-semibold mb-2">Verifica Documentale</h3>
+                            <p class="text-gray-600">Ogni impresa è controllata manualmente. Verifichiamo DURC, Visura Camerale e Polizza RC per la tua sicurezza.</p>
+                        </div>
+                        <div class="bg-white p-6 rounded-lg shadow-sm">
+                            <i class="fas fa-gavel text-4xl text-blue-500 mb-3"></i>
+                            <h3 class="text-xl font-semibold mb-2">Recensioni con Sopralluogo</h3>
+                            <p class="text-gray-600">In caso di critiche, un tecnico indipendente verifica la situazione. Massima trasparenza, zero sorprese.</p>
+                        </div>
+                        <div class="bg-white p-6 rounded-lg shadow-sm">
+                            <i class="fas fa-award text-4xl text-amber-500 mb-3"></i>
+                            <h3 class="text-xl font-semibold mb-2">Solo Professionisti di Qualità</h3>
+                            <p class="text-gray-600">Il nostro obiettivo è creare un network di eccellenza, connettendoti solo con le migliori imprese sul territorio.</p>
+                        </div>
+                    </div>
+                </section>
+
+                <section class="mb-12">
+                    <h2 class="text-3xl font-bold mb-6 text-center">Cerca per Categoria</h2>
+                    <div class="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4">
+                        <button class="category-card" data-category="Ristrutturazioni">
+                            <i class="fas fa-paint-roller text-4xl text-blue-500 mb-2"></i>
+                            <p class="font-semibold">Ristrutturazioni</p>
+                        </button>
+                        <button class="category-card" data-category="Costruzioni">
+                            <i class="fas fa-building text-4xl text-blue-500 mb-2"></i>
+                            <p class="font-semibold">Costruzioni</p>
+                        </button>
+                        <button class="category-card" data-category="Impianti">
+                            <i class="fas fa-bolt text-4xl text-blue-500 mb-2"></i>
+                            <p class="font-semibold">Impianti</p>
+                        </button>
+                        <button class="category-card" data-category="Cappotto Termico">
+                            <i class="fas fa-thermometer-half text-4xl text-blue-500 mb-2"></i>
+                            <p class="font-semibold">Cappotto Termico</p>
+                        </button>
+                        <button class="category-card" data-category="Tetti">
+                            <i class="fas fa-home text-4xl text-blue-500 mb-2"></i>
+                            <p class="font-semibold">Tetti e Coperture</p>
+                        </button>
+                        <button class="category-card" data-category="Finiture">
+                            <i class="fas fa-drafting-compass text-4xl text-blue-500 mb-2"></i>
+                            <p class="font-semibold">Finiture d'Interni</p>
+                        </button>
+                    </div>
+                </section>
+
+                <section>
+                    <h2 class="text-3xl font-bold mb-6 text-center">Imprese in Evidenza</h2>
+                    <div id="featured-companies" class="grid md:grid-cols-2 lg:grid-cols-3 gap-6"></div>
+                </section>
+            </div>
+        </div>
+
+        <div id="page-search-results" class="page container mx-auto p-4 md:p-8">
+            <div class="flex flex-col md:flex-row gap-8">
+                <aside class="w-full md:w-1/4">
+                    <div class="bg-white p-6 rounded-lg shadow-md sticky top-28 space-y-4">
+                        <h3 class="text-lg font-semibold border-b pb-2">Filtra Risultati</h3>
+                        <div>
+                            <label for="filter-region" class="block text-sm font-medium text-gray-700">Regione</label>
+                            <select id="filter-region" class="mt-1 block w-full pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm rounded-md">
+                                <option value="">Tutte le regioni</option>
+                                <option>Lombardia</option>
+                                <option>Lazio</option>
+                                <option>Campania</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label for="filter-category" class="block text-sm font-medium text-gray-700">Categoria Lavori</label>
+                            <select id="filter-category" class="mt-1 block w-full pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm rounded-md">
+                                <option value="">Tutte le categorie</option>
+                                <option>Ristrutturazioni</option>
+                                <option>Costruzioni</option>
+                                <option>Impianti</option>
+                                <option>Cappotto Termico</option>
+                                <option>Finiture</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700">Valutazione</label>
+                            <div class="mt-2 flex items-center space-x-2" id="rating-filter-buttons">
+                                <button type="button" class="rating-filter" data-rating="4">4+ <i class="fas fa-star text-xs ml-1 text-amber-400"></i></button>
+                                <button type="button" class="rating-filter" data-rating="3">3+ <i class="fas fa-star text-xs ml-1 text-amber-400"></i></button>
+                                <button type="button" class="rating-filter" data-rating="2">2+ <i class="fas fa-star text-xs ml-1 text-amber-400"></i></button>
+                            </div>
+                        </div>
+                        <button id="reset-filters" type="button" class="w-full px-3 py-2 text-sm font-medium bg-gray-100 hover:bg-gray-200 rounded-md">Reimposta filtri</button>
+                    </div>
+                </aside>
+                <div class="w-full md:w-3/4">
+                    <h1 class="text-3xl font-bold mb-4">Risultati della Ricerca</h1>
+                    <p id="search-results-summary" class="text-gray-600 mb-4"></p>
+                    <div id="search-results-list" class="space-y-6"></div>
+                </div>
+            </div>
+        </div>
+
+        <div id="page-company-profile" class="page container mx-auto p-4 md:p-8"></div>
+
+        <div id="page-login" class="page max-w-md mx-auto bg-white p-8 rounded-xl shadow-lg">
+            <h1 class="text-3xl font-bold mb-2 text-center">Accedi alla piattaforma</h1>
+            <p class="text-gray-600 mb-6 text-center">Inserisci le tue credenziali per continuare.</p>
+            <form id="login-form" class="space-y-4">
+                <div class="form-feedback hidden" data-feedback="login"></div>
+                <div>
+                    <label for="login-email" class="block text-sm font-medium">Email</label>
+                    <input id="login-email" name="email" type="email" class="mt-1 w-full p-2 border rounded-md" placeholder="nome@azienda.it" required>
+                </div>
+                <div>
+                    <label for="login-password" class="block text-sm font-medium">Password</label>
+                    <input id="login-password" name="password" type="password" class="mt-1 w-full p-2 border rounded-md" required>
+                </div>
+                <div>
+                    <label for="login-role" class="block text-sm font-medium">Accedi come</label>
+                    <select id="login-role" name="role" class="mt-1 w-full p-2 border rounded-md" required>
+                        <option value="user">Utente</option>
+                        <option value="company">Impresa</option>
+                        <option value="admin">Admin</option>
+                    </select>
+                </div>
+                <button type="submit" class="w-full py-3 bg-blue-600 text-white font-semibold rounded-md hover:bg-blue-700">Accedi</button>
+            </form>
+            <p class="text-sm text-gray-600 mt-6 text-center">
+                Nuovo su Edilizia Verificata?
+                <a href="#" class="text-blue-600 hover:text-blue-700 font-medium" data-page="register-user">Crea un account utente</a>
+                oppure
+                <a href="#" class="text-blue-600 hover:text-blue-700 font-medium" data-page="register-company">registra la tua impresa</a>.
+            </p>
+            <div class="mt-6 p-4 bg-gray-50 rounded-lg text-sm text-gray-600">
+                <p class="font-semibold text-gray-700 mb-1">Suggerimento</p>
+                <p>Per l'accesso amministratore crea un utente dedicato in Firebase e aggiungilo al nodo <code class="font-mono">admins</code> del Realtime Database.</p>
+            </div>
+        </div>
+
+        <div id="page-register-company" class="page max-w-2xl mx-auto bg-white p-8 rounded-xl shadow-lg">
+            <h1 class="text-3xl font-bold mb-2 text-center">Registra la tua Impresa</h1>
+            <p class="text-gray-600 mb-6 text-center">Entra a far parte del nostro network di professionisti verificati.</p>
+            <form id="register-company-form" class="space-y-4">
+                <div class="form-feedback hidden" data-feedback="register-company"></div>
+                <div>
+                    <label for="company-name" class="block text-sm font-medium">Ragione Sociale</label>
+                    <input id="company-name" name="companyName" type="text" class="mt-1 w-full p-2 border rounded-md" placeholder="La Tua Impresa S.R.L." required>
+                </div>
+                <div class="grid md:grid-cols-2 gap-4">
+                    <div>
+                        <label for="company-piva" class="block text-sm font-medium">Partita IVA</label>
+                        <input id="company-piva" name="vatNumber" type="text" class="mt-1 w-full p-2 border rounded-md" placeholder="IT12345678901" required>
+                    </div>
+                    <div>
+                        <label for="company-region" class="block text-sm font-medium">Regione Operativa</label>
+                        <select id="company-region" name="region" class="mt-1 w-full p-2 border rounded-md" required>
+                            <option value="">Seleziona una regione</option>
+                            <option>Abruzzo</option>
+                            <option>Basilicata</option>
+                            <option>Calabria</option>
+                            <option>Campania</option>
+                            <option>Emilia-Romagna</option>
+                            <option>Friuli-Venezia Giulia</option>
+                            <option>Lazio</option>
+                            <option>Liguria</option>
+                            <option>Lombardia</option>
+                            <option>Marche</option>
+                            <option>Molise</option>
+                            <option>Piemonte</option>
+                            <option>Puglia</option>
+                            <option>Sardegna</option>
+                            <option>Sicilia</option>
+                            <option>Toscana</option>
+                            <option>Trentino-Alto Adige</option>
+                            <option>Umbria</option>
+                            <option>Valle d'Aosta</option>
+                            <option>Veneto</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="grid md:grid-cols-2 gap-4">
+                    <div>
+                        <label for="company-province" class="block text-sm font-medium">Provincia o Comune</label>
+                        <input id="company-province" name="province" type="text" class="mt-1 w-full p-2 border rounded-md" placeholder="Milano" required>
+                    </div>
+                    <div>
+                        <label for="company-contact" class="block text-sm font-medium">Referente</label>
+                        <input id="company-contact" name="contactName" type="text" class="mt-1 w-full p-2 border rounded-md" placeholder="Mario Rossi" required>
+                    </div>
+                </div>
+                <div>
+                    <label for="company-email" class="block text-sm font-medium">Email di Accesso</label>
+                    <input id="company-email" name="email" type="email" class="mt-1 w-full p-2 border rounded-md" placeholder="info@latuaimpresa.it" required>
+                </div>
+                <div class="grid md:grid-cols-2 gap-4">
+                    <div>
+                        <label for="company-password" class="block text-sm font-medium">Password</label>
+                        <input id="company-password" name="password" type="password" class="mt-1 w-full p-2 border rounded-md" minlength="6" required>
+                    </div>
+                    <div>
+                        <label for="company-password-confirm" class="block text-sm font-medium">Conferma Password</label>
+                        <input id="company-password-confirm" name="confirmPassword" type="password" class="mt-1 w-full p-2 border rounded-md" minlength="6" required>
+                    </div>
+                </div>
+                <div>
+                    <label for="company-description" class="block text-sm font-medium">Descrivi la tua impresa</label>
+                    <textarea id="company-description" name="description" class="mt-1 w-full p-2 border rounded-md" rows="4" placeholder="Parlaci delle tue specializzazioni e dei tuoi servizi principali."></textarea>
+                </div>
+                <div>
+                    <label class="block text-sm font-medium">Carica Visura Camerale (PDF)</label>
+                    <input type="file" class="mt-1 w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100" accept="application/pdf">
+                </div>
+                <div>
+                    <label class="block text-sm font-medium">Carica DURC (PDF)</label>
+                    <input type="file" class="mt-1 w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100" accept="application/pdf">
+                </div>
+                <button type="submit" class="w-full py-3 bg-blue-600 text-white font-semibold rounded-md hover:bg-blue-700">Invia per la Verifica</button>
+            </form>
+        </div>
+
+        <div id="page-register-user" class="page max-w-md mx-auto bg-white p-8 rounded-xl shadow-lg">
+            <h1 class="text-3xl font-bold mb-6 text-center">Crea un Account</h1>
+            <form id="register-user-form" class="space-y-4">
+                <div class="form-feedback hidden" data-feedback="register-user"></div>
+                <div>
+                    <label for="user-name" class="block text-sm font-medium">Nome e Cognome</label>
+                    <input id="user-name" name="fullName" type="text" class="mt-1 w-full p-2 border rounded-md" placeholder="Mario Rossi" required>
+                </div>
+                <div>
+                    <label for="user-email" class="block text-sm font-medium">Email</label>
+                    <input id="user-email" name="email" type="email" class="mt-1 w-full p-2 border rounded-md" placeholder="mario.rossi@email.com" required>
+                </div>
+                <div>
+                    <label for="user-password" class="block text-sm font-medium">Password</label>
+                    <input id="user-password" name="password" type="password" class="mt-1 w-full p-2 border rounded-md" minlength="6" required>
+                </div>
+                <div>
+                    <label for="user-password-confirm" class="block text-sm font-medium">Conferma Password</label>
+                    <input id="user-password-confirm" name="confirmPassword" type="password" class="mt-1 w-full p-2 border rounded-md" minlength="6" required>
+                </div>
+                <button type="submit" class="w-full py-3 bg-blue-600 text-white font-semibold rounded-md hover:bg-blue-700">Registrati</button>
+            </form>
+            <p class="text-xs text-gray-600 mt-4 text-center">Registrandoti accetti i nostri termini di servizio e l'informativa sulla privacy.</p>
+        </div>
+
+        <div id="page-how-it-works" class="page max-w-4xl mx-auto bg-white p-8 rounded-xl shadow-lg">
+            <h1 class="text-3xl font-bold mb-6 text-center">Come Funziona la Verifica</h1>
+            <div class="space-y-6 text-gray-700">
+                <div>
+                    <h2 class="text-xl font-semibold mb-2 text-blue-600"><i class="fas fa-file-alt mr-2"></i>1. Verifica Documentale</h2>
+                    <p>Ogni impresa che si iscrive deve fornire documenti essenziali: Visura Camerale, DURC (Documento Unico di Regolarità Contributiva) e una polizza RC professionale valida. Il nostro team controlla manualmente ogni documento per garantirne l'autenticità e la validità.</p>
+                </div>
+                <div>
+                    <h2 class="text-xl font-semibold mb-2 text-blue-600"><i class="fas fa-check-circle mr-2"></i>2. Il Badge "Impresa Verificata"</h2>
+                    <p>Solo dopo aver superato la verifica documentale, l'impresa ottiene il badge "Impresa Verificata". Questo badge è il nostro marchio di fiducia e viene riesaminato ogni 12 mesi o alla scadenza dei documenti, assicurando che le informazioni siano sempre aggiornate.</p>
+                </div>
+                <div>
+                    <h2 class="text-xl font-semibold mb-2 text-blue-600"><i class="fas fa-gavel mr-2"></i>3. Recensioni Verificate da Sopralluogo</h2>
+                    <p>La nostra unicità sta nella gestione delle recensioni. In caso di una recensione fortemente negativa e contestata, non la nascondiamo. Proponiamo un sopralluogo da parte di un tecnico terzo e indipendente per valutare la situazione in modo oggettivo. Se la critica è fondata, la recensione viene pubblicata con uno speciale badge "Verificata da Tecnico", offrendo una trasparenza senza precedenti.</p>
+                </div>
+            </div>
+        </div>
+
+        <div id="page-admin-dashboard" class="page container mx-auto p-4 md:p-8">
+            <h1 class="text-3xl font-bold mb-6">Dashboard Amministratore</h1>
+            <div class="grid md:grid-cols-2 gap-8">
+                <div class="bg-white p-6 rounded-lg shadow-md">
+                    <h2 class="text-xl font-semibold mb-4 border-b pb-2">Imprese in Attesa di Verifica</h2>
+                    <div id="admin-pending-companies" class="space-y-3"></div>
+                </div>
+                <div class="bg-white p-6 rounded-lg shadow-md">
+                    <h2 class="text-xl font-semibold mb-4 border-b pb-2">Recensioni da Moderare</h2>
+                    <div id="admin-pending-reviews" class="space-y-3"></div>
+                </div>
+            </div>
+        </div>
+
+        <div id="page-leave-review" class="page max-w-2xl mx-auto bg-white p-8 rounded-xl shadow-lg"></div>
+    </main>
+
+    <footer class="bg-gray-800 text-white mt-12">
+        <div class="container mx-auto px-6 py-8">
+            <div class="grid grid-cols-2 md:grid-cols-4 gap-8">
+                <div>
+                    <h3 class="font-bold text-lg mb-2">Edilizia Verificata</h3>
+                    <p class="text-gray-400 text-sm">La tua fiducia, il nostro impegno.</p>
+                </div>
+                <div>
+                    <h3 class="font-semibold mb-2">Per gli Utenti</h3>
+                    <ul class="text-gray-400 text-sm space-y-2">
+                        <li><a href="#" class="hover:text-white" data-page="home">Cerca Imprese</a></li>
+                        <li><a href="#" class="hover:text-white" data-page="how-it-works">Come Funziona</a></li>
+                        <li><a href="#" class="hover:text-white" data-page="register-user">Registrati</a></li>
+                    </ul>
+                </div>
+                <div>
+                    <h3 class="font-semibold mb-2">Per le Imprese</h3>
+                    <ul class="text-gray-400 text-sm space-y-2">
+                        <li><a href="#" class="hover:text-white" data-page="register-company">Iscrivi la tua azienda</a></li>
+                        <li><a href="#" class="hover:text-white">Linee Guida</a></li>
+                    </ul>
+                </div>
+                <div>
+                    <h3 class="font-semibold mb-2">Legale</h3>
+                    <ul class="text-gray-400 text-sm space-y-2">
+                        <li><a href="#" class="hover:text-white">Privacy Policy</a></li>
+                        <li><a href="#" class="hover:text-white">Termini di Servizio</a></li>
+                    </ul>
+                </div>
+            </div>
+            <div class="mt-8 border-t border-gray-700 pt-4 text-center text-gray-500 text-sm">
+                &copy; 2025 Edilizia Verificata. Tutti i diritti riservati.
+            </div>
+        </div>
+    </footer>
+
+    <script src="app.js" defer></script>
+</body>
+</html>
