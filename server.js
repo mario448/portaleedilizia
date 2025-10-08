@@ -554,7 +554,8 @@ function mapReviewsFromFirebase(snapshot) {
       rating: Number.isFinite(ratingValue) ? ratingValue : 0,
       text: value.text || value.comment || '',
       status: value.status || 'pending',
-      requiresInspection: Boolean(value.requiresInspection || value.requires_inspection)
+      requiresInspection: Boolean(value.requiresInspection || value.requires_inspection),
+      createdAt: value.createdAt || value.created_at || value.timestamp || value.date || ''
     };
   });
 }

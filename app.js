@@ -273,6 +273,7 @@ class App {
     this.currentPage = 'home';
     this.activeCompanyId = null;
     this.activeCompany = null;
+    this.activeCompanyTab = 'info';
     this.activeModalOverlay = null;
     this.companyIdByFirebaseId = new Map(
       (this.data.companies || [])
@@ -290,6 +291,62 @@ class App {
         .filter(Boolean)
     );
     this.pendingRegisterType = null;
+  }
+
+  escapeHtml(value) {
+    if (value === null || value === undefined) {
+      return '';
+    }
+
+    return value
+      .toString()
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#39;');
+  }
+
+  formatReviewDate(dateInput) {
+    if (!dateInput) {
+      return '';
+    }
+
+    const parsed = new Date(dateInput);
+    if (Number.isNaN(parsed.getTime())) {
+      return '';
+    }
+
+    return parsed.toLocaleDateString('it-IT', {
+      day: '2-digit',
+      month: 'long',
+      year: 'numeric'
+    });
+  }
+
+  formatReviewDateTime(dateInput) {
+    if (!dateInput) {
+      return '';
+    }
+
+    const parsed = new Date(dateInput);
+    if (Number.isNaN(parsed.getTime())) {
+      return '';
+    }
+
+    return parsed.toISOString();
+  }
+
+  getReviewParagraphs(text) {
+    if (!text) {
+      return [];
+    }
+
+    return text
+      .toString()
+      .split(/\r?\n+/)
+      .map((paragraph) => paragraph.trim())
+      .filter(Boolean);
   }
 
   generateCompanyId() {
@@ -483,6 +540,13 @@ class App {
             ? existingReview.requiresInspection
             : false;
 
+    const createdAt =
+      remoteReview.createdAt ||
+      remoteReview.created_at ||
+      remoteReview.timestamp ||
+      remoteReview.date ||
+      (existingReview ? existingReview.createdAt : '');
+
     return {
       id: existingReview ? existingReview.id : this.generateReviewId(),
       firebaseId: firebaseId || null,
@@ -492,7 +556,8 @@ class App {
       rating: Number.isFinite(ratingValue) ? ratingValue : existingReview ? existingReview.rating : 0,
       text: (remoteReview.text || remoteReview.comment || (existingReview ? existingReview.text : '')).toString(),
       status: remoteReview.status || (existingReview ? existingReview.status : 'pending'),
-      requiresInspection: Boolean(requiresInspectionSource)
+      requiresInspection: Boolean(requiresInspectionSource),
+      createdAt
     };
   }
 
@@ -535,7 +600,7 @@ class App {
     if (this.currentPage === 'company-profile' && this.activeCompanyId) {
       const activeCompany = this.data.companies.find((company) => company.id === this.activeCompanyId);
       if (activeCompany) {
-        this.renderCompanyProfile(activeCompany);
+        this.renderCompanyProfile(activeCompany, { activeTab: this.activeCompanyTab });
       }
     }
   }
@@ -603,7 +668,7 @@ class App {
     if (this.currentPage === 'company-profile' && this.activeCompanyId) {
       const activeCompany = this.data.companies.find((company) => company.id === this.activeCompanyId);
       if (activeCompany) {
-        this.renderCompanyProfile(activeCompany);
+        this.renderCompanyProfile(activeCompany, { activeTab: this.activeCompanyTab });
       }
     }
   }
@@ -1147,6 +1212,14 @@ class App {
           <div class="flex flex-wrap gap-2">
             ${categories}
           </div>
+          <div class="mt-5 flex flex-wrap gap-2">
+            <button type="button" class="company-card-action" data-company-trigger="details" data-company-id="${company.id}">
+              Scheda impresa
+            </button>
+            <button type="button" class="company-card-action company-card-action--secondary" data-company-trigger="reviews" data-company-id="${company.id}">
+              Leggi recensioni
+            </button>
+          </div>
         </div>
       </article>
     `;
@@ -1164,9 +1237,37 @@ class App {
   bindCompanyCards(container) {
     const cards = container.querySelectorAll('[data-company-id]');
     cards.forEach((card) => {
-      card.addEventListener('click', () => {
-        const companyId = Number(card.getAttribute('data-company-id'));
-        this.showCompanyProfile(companyId);
+      card.addEventListener('click', (event) => {
+        if (event.target.closest('[data-company-trigger]')) {
+          return;
+        }
+
+        const companyId = Number.parseInt(card.getAttribute('data-company-id'), 10);
+        if (!Number.isFinite(companyId)) {
+          return;
+        }
+
+        this.showCompanyProfile(companyId, { activeTab: 'info' });
+      });
+    });
+
+    const actionButtons = container.querySelectorAll('[data-company-trigger]');
+    actionButtons.forEach((button) => {
+      button.addEventListener('click', (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+
+        const companyId = Number.parseInt(button.getAttribute('data-company-id'), 10);
+        if (!Number.isFinite(companyId)) {
+          return;
+        }
+
+        const trigger = button.getAttribute('data-company-trigger');
+        if (trigger === 'reviews') {
+          this.showCompanyProfile(companyId, { activeTab: 'reviews', focusReviews: true });
+        } else {
+          this.showCompanyProfile(companyId, { activeTab: 'info' });
+        }
       });
     });
   }
@@ -1271,9 +1372,17 @@ class App {
     return `${count} impresa${count === 1 ? '' : 'e'} trovata${count === 1 ? '' : 'e'}${filtersSummary}.`;
   }
 
-  renderCompanyProfile(company) {
+  renderCompanyProfile(company, options = {}) {
     const container = document.getElementById('page-company-profile');
     if (!container) return;
+
+    const desiredTab =
+      typeof options.activeTab === 'string' && options.activeTab.trim().length
+        ? options.activeTab.trim()
+        : this.activeCompanyTab;
+    const allowedTabs = ['info', 'portfolio', 'reviews'];
+    const activeTab = allowedTabs.includes(desiredTab) ? desiredTab : 'info';
+    const focusReviews = Boolean(options.focusReviews);
 
     const companyReviews = this.data.reviews.filter((review) => {
       if (!review || review.status !== 'approved') {
@@ -1287,6 +1396,8 @@ class App {
 
       return matchesLocalId || matchesFirebaseId;
     });
+
+    const reviewCount = companyReviews.length;
 
     container.innerHTML = `
       <div class="bg-white p-6 md:p-8 rounded-xl shadow-lg">
@@ -1312,15 +1423,15 @@ class App {
         <div class="mb-6">
           <div class="border-b border-gray-200">
             <nav class="-mb-px flex space-x-8" aria-label="Tabs">
-              <a href="#" class="company-tab active-tab" data-tab="info">Informazioni</a>
-              <a href="#" class="company-tab" data-tab="portfolio">Portfolio Lavori</a>
-              <a href="#" class="company-tab" data-tab="reviews">Recensioni</a>
+              <a href="#" class="company-tab ${activeTab === 'info' ? 'active-tab' : ''}" data-tab="info">Informazioni</a>
+              <a href="#" class="company-tab ${activeTab === 'portfolio' ? 'active-tab' : ''}" data-tab="portfolio">Portfolio Lavori</a>
+              <a href="#" class="company-tab ${activeTab === 'reviews' ? 'active-tab' : ''}" data-tab="reviews">Recensioni</a>
             </nav>
           </div>
         </div>
 
         <div id="company-tab-content">
-          <section class="company-tab-pane" data-tab-content="info">
+          <section class="company-tab-pane ${activeTab === 'info' ? '' : 'hidden'}" data-tab-content="info">
             <h2 class="text-2xl font-bold mb-4">Chi Siamo</h2>
             <p class="text-gray-700 leading-relaxed">${company.description}</p>
             ${
@@ -1337,7 +1448,7 @@ class App {
             }
           </section>
 
-          <section class="company-tab-pane hidden" data-tab-content="portfolio">
+          <section class="company-tab-pane ${activeTab === 'portfolio' ? '' : 'hidden'}" data-tab-content="portfolio">
             <h2 class="text-2xl font-bold mb-4">I nostri Lavori</h2>
             <div class="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
               ${
@@ -1368,27 +1479,48 @@ class App {
             </div>
           </section>
 
-          <section class="company-tab-pane hidden" data-tab-content="reviews">
+          <section class="company-tab-pane ${activeTab === 'reviews' ? '' : 'hidden'}" data-tab-content="reviews">
             <div class="flex justify-between items-center mb-4 gap-4 flex-wrap">
-              <h2 class="text-2xl font-bold">Recensioni (${companyReviews.length})</h2>
+              <h2 class="text-2xl font-bold" tabindex="-1">Recensioni (${reviewCount})</h2>
               <button class="px-4 py-2 bg-green-600 text-white font-semibold rounded-md hover:bg-green-700" type="button" data-company-review="${company.id}">
                 <i class="fas fa-plus mr-2"></i>Lascia una recensione
               </button>
             </div>
             <div class="space-y-6">
-              ${companyReviews
-                .map(
-                  (review) => `
-                    <article class="p-4 border rounded-lg bg-gray-50/50">
-                      <div class="flex items-center mb-2 gap-4">
-                        <span class="font-semibold">${review.user}</span>
-                        <div>${this.renderStars(review.rating)}</div>
-                      </div>
-                      <p class="text-gray-700">${review.text}</p>
-                    </article>
-                  `
-                )
-                .join('') || '<p class="text-gray-500">Questa impresa non ha ancora recensioni.</p>'}
+              ${
+                companyReviews.length
+                  ? companyReviews
+                      .map((review, index) => {
+                        const createdAtLabel = this.formatReviewDate(review.createdAt);
+                        const dateTimeValue = this.formatReviewDateTime(review.createdAt);
+                        const safeUser = this.escapeHtml(review.user);
+                        const safeText = this.escapeHtml(review.text);
+                        const previewText = safeText.replace(/\r?\n/g, '<br>');
+
+                        return `
+                          <article class="review-card" data-review-index="${index}">
+                            <div class="review-card__header">
+                              <div class="review-card__identity">
+                                <span class="font-semibold">${safeUser || 'Utente'}</span>
+                                <div>${this.renderStars(review.rating)}</div>
+                              </div>
+                              ${
+                                createdAtLabel
+                                  ? `<time class="review-card__meta" datetime="${dateTimeValue}">${createdAtLabel}</time>`
+                                  : ''
+                              }
+                            </div>
+                            <p class="review-card__text review-card__text--clamped">${previewText}</p>
+                            <button type="button" class="review-card__button" data-review-open="${index}">
+                              Leggi commento completo
+                              <i class="fas fa-arrow-right text-xs"></i>
+                            </button>
+                          </article>
+                        `;
+                      })
+                      .join('')
+                  : '<p class="text-gray-500">Questa impresa non ha ancora recensioni.</p>'
+              }
             </div>
           </section>
         </div>
@@ -1396,8 +1528,11 @@ class App {
     `;
 
     this.activeCompany = company;
-    this.setupCompanyTabs();
+    this.activeCompanyId = company.id;
+    this.activeCompanyTab = activeTab;
+    this.setupCompanyTabs(container);
     this.setupPortfolioProjects(company);
+    this.setupReviewCards(company, companyReviews);
     const reviewButton = container.querySelector('[data-company-review]');
     if (reviewButton) {
       reviewButton.addEventListener('click', () => {
@@ -1405,11 +1540,32 @@ class App {
         this.showLeaveReviewPage(companyId);
       });
     }
+
+    if (focusReviews && activeTab === 'reviews') {
+      const reviewsPane = container.querySelector('[data-tab-content="reviews"]');
+      const focusTarget = reviewsPane?.querySelector('h2');
+      if (focusTarget) {
+        requestAnimationFrame(() => {
+          if (typeof focusTarget.focus === 'function') {
+            try {
+              focusTarget.focus({ preventScroll: true });
+            } catch (error) {
+              focusTarget.focus();
+            }
+          }
+          focusTarget.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        });
+      }
+    }
   }
 
-  setupCompanyTabs() {
-    const tabs = document.querySelectorAll('.company-tab');
-    const panes = document.querySelectorAll('[data-tab-content]');
+  setupCompanyTabs(container) {
+    if (!container) {
+      return;
+    }
+
+    const tabs = container.querySelectorAll('.company-tab');
+    const panes = container.querySelectorAll('[data-tab-content]');
 
     tabs.forEach((tab) => {
       tab.addEventListener('click', (event) => {
@@ -1420,6 +1576,8 @@ class App {
         tabs.forEach((t) => t.classList.remove('active-tab'));
         tab.classList.add('active-tab');
 
+        this.activeCompanyTab = target;
+
         panes.forEach((pane) => {
           if (pane.getAttribute('data-tab-content') === target) {
             pane.classList.remove('hidden');
@@ -1429,6 +1587,119 @@ class App {
         });
       });
     });
+  }
+
+  setupReviewCards(company, reviews) {
+    if (!company || !Array.isArray(reviews) || !reviews.length) {
+      return;
+    }
+
+    const container = document.getElementById('page-company-profile');
+    if (!container) {
+      return;
+    }
+
+    const buttons = container.querySelectorAll('[data-review-open]');
+    buttons.forEach((button) => {
+      const reviewIndex = Number.parseInt(button.getAttribute('data-review-open'), 10);
+      if (!Number.isFinite(reviewIndex) || !reviews[reviewIndex]) {
+        return;
+      }
+
+      const review = reviews[reviewIndex];
+      const openDetails = (event) => {
+        event.preventDefault();
+        this.openReviewDetails(company, review);
+      };
+
+      button.addEventListener('click', openDetails);
+    });
+  }
+
+  openReviewDetails(company, review) {
+    if (!company || !review) {
+      return;
+    }
+
+    this.showReviewModal(company, review);
+  }
+
+  showReviewModal(company, review) {
+    if (this.activeModalOverlay) {
+      this.closeActiveModal();
+    }
+
+    const createdAtLabel = this.formatReviewDate(review.createdAt);
+    const paragraphs = this.getReviewParagraphs(review.text);
+
+    const overlay = document.createElement('div');
+    overlay.className = 'modal-overlay';
+    overlay.innerHTML = `
+      <div class="modal-content modal-content--review" role="dialog" aria-modal="true" aria-label="Recensione di ${this.escapeHtml(
+        review.user || 'Utente'
+      )}">
+        <button type="button" class="modal-close" aria-label="Chiudi" data-modal-close>
+          <i class="fas fa-times"></i>
+        </button>
+        <div class="modal-header">
+          <p class="text-sm uppercase tracking-wide text-blue-600 font-semibold mb-1">${this.escapeHtml(
+            company.name
+          )}</p>
+          <h3 class="text-2xl font-bold text-slate-900 flex items-center gap-3">
+            <span>${this.escapeHtml(review.user || 'Utente')}</span>
+            <div class="flex items-center gap-1 text-amber-500">
+              ${this.renderStars(review.rating)}
+            </div>
+          </h3>
+          ${
+            createdAtLabel
+              ? `<p class="review-modal__meta">Recensione del ${createdAtLabel}</p>`
+              : ''
+          }
+        </div>
+        <div class="review-modal__body">
+          ${
+            paragraphs.length
+              ? paragraphs.map((paragraph) => `<p>${this.escapeHtml(paragraph)}</p>`).join('')
+              : `<p>${this.escapeHtml(review.text || '')}</p>`
+          }
+        </div>
+      </div>
+    `;
+
+    const closeModal = () => {
+      overlay.classList.remove('modal-overlay--visible');
+      window.setTimeout(() => {
+        overlay.remove();
+      }, 200);
+      document.removeEventListener('keydown', onKeyDown);
+      this.activeModalOverlay = null;
+    };
+
+    const onKeyDown = (event) => {
+      if (event.key === 'Escape') {
+        closeModal();
+      }
+    };
+
+    overlay.addEventListener('click', (event) => {
+      if (event.target === overlay) {
+        closeModal();
+      }
+    });
+
+    const closeButton = overlay.querySelector('[data-modal-close]');
+    if (closeButton) {
+      closeButton.addEventListener('click', closeModal);
+    }
+
+    document.body.appendChild(overlay);
+    requestAnimationFrame(() => {
+      overlay.classList.add('modal-overlay--visible');
+    });
+
+    document.addEventListener('keydown', onKeyDown);
+    this.activeModalOverlay = overlay;
   }
 
   setupPortfolioProjects(company) {
@@ -1696,12 +1967,12 @@ class App {
     }
   }
 
-  showCompanyProfile(companyId) {
+  showCompanyProfile(companyId, options = {}) {
     const company = this.data.companies.find((item) => item.id === companyId);
     if (!company) return;
 
     this.activeCompanyId = company.id;
-    this.renderCompanyProfile(company);
+    this.renderCompanyProfile(company, options);
     this.navigate('company-profile');
   }
 

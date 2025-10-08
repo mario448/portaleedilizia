@@ -270,3 +270,130 @@ body {
         justify-content: space-between;
     }
 }
+
+.company-card-action {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.55rem 0.9rem;
+    border-radius: 0.75rem;
+    border: none;
+    font-size: 0.9rem;
+    font-weight: 600;
+    background-color: #1d4ed8;
+    color: #ffffff;
+    cursor: pointer;
+    transition: background-color 0.2s ease, transform 0.2s ease;
+}
+
+.company-card-action:hover {
+    background-color: #1e40af;
+    transform: translateY(-1px);
+}
+
+.company-card-action:focus-visible {
+    outline: 3px solid rgba(59, 130, 246, 0.45);
+    outline-offset: 2px;
+}
+
+.company-card-action--secondary {
+    background-color: #e0f2fe;
+    color: #0f172a;
+}
+
+.company-card-action--secondary:hover {
+    background-color: #bfdbfe;
+}
+
+.review-card {
+    padding: 1.25rem;
+    border-radius: 0.9rem;
+    border: 1px solid #e2e8f0;
+    background-color: rgba(248, 250, 252, 0.75);
+    box-shadow: 0 8px 16px rgba(15, 23, 42, 0.05);
+}
+
+.review-card__header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 1rem;
+    flex-wrap: wrap;
+    margin-bottom: 0.75rem;
+}
+
+.review-card__identity {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    flex-wrap: wrap;
+}
+
+.review-card__meta {
+    font-size: 0.75rem;
+    font-weight: 600;
+    color: #64748b;
+    letter-spacing: 0.02em;
+}
+
+.review-card__text {
+    color: #374151;
+    font-size: 0.95rem;
+    line-height: 1.6;
+}
+
+.review-card__text--clamped {
+    display: -webkit-box;
+    -webkit-line-clamp: 4;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+}
+
+.review-card__button {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    margin-top: 1rem;
+    padding: 0;
+    border: none;
+    background: none;
+    color: #2563eb;
+    font-weight: 600;
+    font-size: 0.9rem;
+    cursor: pointer;
+    transition: color 0.2s ease, transform 0.2s ease;
+}
+
+.review-card__button:hover {
+    color: #1e40af;
+    transform: translateX(2px);
+}
+
+.review-card__button i {
+    transition: transform 0.2s ease;
+}
+
+.review-card__button:hover i {
+    transform: translateX(3px);
+}
+
+.modal-content--review {
+    width: min(640px, 100%);
+}
+
+.review-modal__meta {
+    margin-top: 0.5rem;
+    font-size: 0.85rem;
+    color: #475569;
+}
+
+.review-modal__body {
+    margin-top: 1.5rem;
+    display: grid;
+    gap: 1rem;
+}
+
+.review-modal__body p {
+    color: #334155;
+    line-height: 1.7;
+}
