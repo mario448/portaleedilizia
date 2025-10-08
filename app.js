@@ -16,17 +16,38 @@ const MOCK_DATA = {
         {
           title: 'Villa di Lusso, Como',
           year: 2023,
-          img: 'https://images.unsplash.com/photo-1600585154340-be6161a56a0c?q=80&w=800&auto=format&fit=crop'
+          img: 'https://images.unsplash.com/photo-1600585154340-be6161a56a0c?q=80&w=800&auto=format&fit=crop',
+          description:
+            'Realizzazione di una villa contemporanea in classe energetica A4 con finiture su misura e gestione completa del cantiere.',
+          images: [
+            'https://images.unsplash.com/photo-1600585154340-be6161a56a0c?q=80&w=1600&auto=format&fit=crop',
+            'https://images.unsplash.com/photo-1600607687920-4e2a68cba9fe?q=80&w=1600&auto=format&fit=crop',
+            'https://images.unsplash.com/photo-1600210492493-0946911123ea?q=80&w=1600&auto=format&fit=crop'
+          ]
         },
         {
           title: 'Ristrutturazione Attico, Milano',
           year: 2022,
-          img: 'https://images.unsplash.com/photo-1600607687939-ce8a6c25118c?q=80&w=800&auto=format&fit=crop'
+          img: 'https://images.unsplash.com/photo-1600607687939-ce8a6c25118c?q=80&w=800&auto=format&fit=crop',
+          description:
+            'Riprogettazione totale di un attico con ampliamento delle superfici vetrate e impianto domotico integrato.',
+          images: [
+            'https://images.unsplash.com/photo-1600607687939-ce8a6c25118c?q=80&w=1600&auto=format&fit=crop',
+            'https://images.unsplash.com/photo-1512914890250-353c83f2586d?q=80&w=1600&auto=format&fit=crop',
+            'https://images.unsplash.com/photo-1484154218962-a197022b5858?q=80&w=1600&auto=format&fit=crop'
+          ]
         },
         {
           title: 'Condominio Eco-sostenibile',
           year: 2021,
-          img: 'https://images.unsplash.com/photo-1582268611958-ebfd161ef9cf?q=80&w=800&auto=format&fit=crop'
+          img: 'https://images.unsplash.com/photo-1582268611958-ebfd161ef9cf?q=80&w=800&auto=format&fit=crop',
+          description:
+            'Costruzione di un condominio NZEB con sistemi di recupero energia e rivestimento ventilato in legno.',
+          images: [
+            'https://images.unsplash.com/photo-1582268611958-ebfd161ef9cf?q=80&w=1600&auto=format&fit=crop',
+            'https://images.unsplash.com/photo-1580587771525-78b9dba3b914?q=80&w=1600&auto=format&fit=crop',
+            'https://images.unsplash.com/photo-1529429617124-aee9552634fe?q=80&w=1600&auto=format&fit=crop'
+          ]
         }
       ]
     },
@@ -46,12 +67,26 @@ const MOCK_DATA = {
         {
           title: 'Rifacimento Bagno, Prati',
           year: 2023,
-          img: 'https://images.unsplash.com/photo-1586023492125-27b2c045efd7?q=80&w=800&auto=format&fit=crop'
+          img: 'https://images.unsplash.com/photo-1586023492125-27b2c045efd7?q=80&w=800&auto=format&fit=crop',
+          description:
+            'Trasformazione completa di un bagno di 6mq con nuova distribuzione degli spazi, illuminazione LED e finiture in gres effetto pietra.',
+          images: [
+            'https://images.unsplash.com/photo-1586023492125-27b2c045efd7?q=80&w=1600&auto=format&fit=crop',
+            'https://images.unsplash.com/photo-1560185008-5f0bb1866cab?q=80&w=1600&auto=format&fit=crop',
+            'https://images.unsplash.com/photo-1552324190-9e58650a1b1d?q=80&w=1600&auto=format&fit=crop'
+          ]
         },
         {
           title: 'Open Space Moderno, EUR',
           year: 2022,
-          img: 'https://images.unsplash.com/photo-1618221195710-dd6b41faaea6?q=80&w=800&auto=format&fit=crop'
+          img: 'https://images.unsplash.com/photo-1618221195710-dd6b41faaea6?q=80&w=800&auto=format&fit=crop',
+          description:
+            'Rinnovo di un appartamento open space con cucina a isola, pavimento continuo in resina e illuminazione scenografica.',
+          images: [
+            'https://images.unsplash.com/photo-1618221195710-dd6b41faaea6?q=80&w=1600&auto=format&fit=crop',
+            'https://images.unsplash.com/photo-1505691723518-36a5ac3be353?q=80&w=1600&auto=format&fit=crop',
+            'https://images.unsplash.com/photo-1493663284031-b7e3aefcae8e?q=80&w=1600&auto=format&fit=crop'
+          ]
         }
       ]
     },
@@ -71,7 +106,14 @@ const MOCK_DATA = {
         {
           title: 'Cappotto Termico, Vomero',
           year: 2023,
-          img: 'https://images.unsplash.com/photo-1572120360610-d971b9d7767c?q=80&w=800&auto=format&fit=crop'
+          img: 'https://images.unsplash.com/photo-1572120360610-d971b9d7767c?q=80&w=800&auto=format&fit=crop',
+          description:
+            'Intervento di riqualificazione energetica con cappotto in lana di roccia e rifacimento dei frontalini dei balconi.',
+          images: [
+            'https://images.unsplash.com/photo-1572120360610-d971b9d7767c?q=80&w=1600&auto=format&fit=crop',
+            'https://images.unsplash.com/photo-1503387762-592deb58ef4e?q=80&w=1600&auto=format&fit=crop',
+            'https://images.unsplash.com/photo-1501183638710-841dd1904471?q=80&w=1600&auto=format&fit=crop'
+          ]
         }
       ]
     },
@@ -230,6 +272,8 @@ class App {
     this.notificationTimeout = null;
     this.currentPage = 'home';
     this.activeCompanyId = null;
+    this.activeCompany = null;
+    this.activeModalOverlay = null;
     this.companyIdByFirebaseId = new Map(
       (this.data.companies || [])
         .filter((company) => company && company.firebaseId)
@@ -282,11 +326,49 @@ class App {
     const portfolio = Array.isArray(remoteCompany.portfolio) && remoteCompany.portfolio.length
       ? remoteCompany.portfolio
           .filter((item) => item && typeof item === 'object')
-          .map((item) => ({
-            title: item.title || item.name || 'Progetto',
-            year: item.year || item.date || '',
-            img: item.img || item.image || ''
-          }))
+          .map((item) => {
+            const rawGallery = Array.isArray(item.images)
+              ? item.images
+              : Array.isArray(item.photos)
+              ? item.photos
+              : Array.isArray(item.gallery)
+              ? item.gallery
+              : [];
+
+            const normalizedGallery = rawGallery
+              .map((entry) => {
+                if (typeof entry === 'string') {
+                  return entry;
+                }
+
+                if (entry && typeof entry === 'object') {
+                  return entry.url || entry.src || entry.image || entry.img || '';
+                }
+
+                return '';
+              })
+              .map((url) => url && url.toString().trim())
+              .filter((url) => Boolean(url));
+
+            const coverImage =
+              item.coverImage ||
+              item.cover ||
+              item.img ||
+              item.image ||
+              (normalizedGallery.length ? normalizedGallery[0] : '');
+
+            if (coverImage && !normalizedGallery.includes(coverImage)) {
+              normalizedGallery.unshift(coverImage);
+            }
+
+            return {
+              title: item.title || item.name || 'Progetto',
+              year: item.year || item.date || '',
+              img: coverImage || '',
+              description: item.description || item.details || item.text || '',
+              images: normalizedGallery
+            };
+          })
       : Array.isArray(fallback.portfolio)
         ? fallback.portfolio
         : [];
@@ -996,6 +1078,7 @@ class App {
   }
 
   navigate(pageId) {
+    this.closeActiveModal();
     this.pages.forEach((page) => page.classList.remove('active'));
     const targetPage = document.getElementById(`page-${pageId}`);
     if (targetPage) {
@@ -1261,12 +1344,20 @@ class App {
                 Array.isArray(company.portfolio) && company.portfolio.length
                   ? company.portfolio
                       .map(
-                        (project) => `
-                    <article class="rounded-lg overflow-hidden border group">
-                      <img src="${project.img}" alt="${project.title}" class="w-full h-48 object-cover group-hover:scale-105 transition-transform">
-                      <div class="bg-gray-50 p-3">
-                        <p class="font-semibold">${project.title}</p>
-                        <p class="text-sm text-gray-500">${project.year}</p>
+                        (project, index) => `
+                    <article class="rounded-lg overflow-hidden border group portfolio-card" role="button" tabindex="0" data-portfolio-project="${index}">
+                      <div class="overflow-hidden">
+                        <img src="${project.img}" alt="${project.title}" class="w-full h-48 object-cover group-hover:scale-105 transition-transform">
+                      </div>
+                      <div class="bg-gray-50 p-3 flex items-start justify-between gap-3">
+                        <div>
+                          <p class="font-semibold">${project.title}</p>
+                          <p class="text-sm text-gray-500">${project.year || ''}</p>
+                        </div>
+                        <span class="text-sm font-semibold text-blue-600 flex items-center gap-1 whitespace-nowrap">
+                          Dettagli
+                          <i class="fas fa-arrow-right text-xs"></i>
+                        </span>
                       </div>
                     </article>
                         `
@@ -1304,7 +1395,9 @@ class App {
       </div>
     `;
 
+    this.activeCompany = company;
     this.setupCompanyTabs();
+    this.setupPortfolioProjects(company);
     const reviewButton = container.querySelector('[data-company-review]');
     if (reviewButton) {
       reviewButton.addEventListener('click', () => {
@@ -1336,6 +1429,142 @@ class App {
         });
       });
     });
+  }
+
+  setupPortfolioProjects(company) {
+    const container = document.getElementById('page-company-profile');
+    if (!container) return;
+
+    const cards = container.querySelectorAll('[data-portfolio-project]');
+    if (!cards.length) return;
+
+    cards.forEach((card) => {
+      const projectIndex = Number.parseInt(card.getAttribute('data-portfolio-project'), 10);
+      if (!Number.isFinite(projectIndex)) {
+        return;
+      }
+
+      const openDetails = (event) => {
+        if (event) {
+          event.preventDefault();
+        }
+        this.openProjectDetails(company, projectIndex);
+      };
+
+      card.addEventListener('click', openDetails);
+      card.addEventListener('keydown', (event) => {
+        if (event.key === 'Enter' || event.key === ' ') {
+          event.preventDefault();
+          openDetails();
+        }
+      });
+    });
+  }
+
+  openProjectDetails(company, projectIndex) {
+    if (!company || !Array.isArray(company.portfolio)) {
+      return;
+    }
+
+    const project = company.portfolio[projectIndex];
+    if (!project) {
+      return;
+    }
+
+    this.showProjectModal(company, project);
+  }
+
+  showProjectModal(company, project) {
+    if (this.activeModalOverlay) {
+      this.closeActiveModal();
+    }
+
+    const galleryImages = Array.isArray(project.images) && project.images.length
+      ? project.images
+      : [project.img].filter(Boolean);
+
+    const overlay = document.createElement('div');
+    overlay.className = 'modal-overlay';
+    overlay.innerHTML = `
+      <div class="modal-content" role="dialog" aria-modal="true" aria-label="Dettagli progetto ${project.title}">
+        <button type="button" class="modal-close" aria-label="Chiudi" data-modal-close>
+          <i class="fas fa-times"></i>
+        </button>
+        <div class="modal-header">
+          <p class="text-sm uppercase tracking-wide text-blue-600 font-semibold mb-1">${company.name}</p>
+          <h3 class="text-2xl font-bold text-slate-900">${project.title}</h3>
+          ${project.year ? `<p class="text-sm text-slate-500">${project.year}</p>` : ''}
+        </div>
+        ${
+          project.description
+            ? `<p class="mt-4 text-slate-700 leading-relaxed">${project.description}</p>`
+            : ''
+        }
+        ${
+          galleryImages.length
+            ? `
+              <div class="project-gallery mt-6">
+                ${galleryImages
+                  .map(
+                    (imageUrl, index) => `
+                      <figure class="project-gallery__item">
+                        <img src="${imageUrl}" alt="${project.title} - immagine ${index + 1}" loading="lazy">
+                      </figure>
+                    `
+                  )
+                  .join('')}
+              </div>
+            `
+            : ''
+        }
+      </div>
+    `;
+
+    const closeModal = () => {
+      overlay.classList.remove('modal-overlay--visible');
+      window.setTimeout(() => {
+        overlay.remove();
+      }, 200);
+      document.removeEventListener('keydown', onKeyDown);
+      this.activeModalOverlay = null;
+    };
+
+    const onKeyDown = (event) => {
+      if (event.key === 'Escape') {
+        closeModal();
+      }
+    };
+
+    overlay.addEventListener('click', (event) => {
+      if (event.target === overlay) {
+        closeModal();
+      }
+    });
+
+    const closeButton = overlay.querySelector('[data-modal-close]');
+    if (closeButton) {
+      closeButton.addEventListener('click', closeModal);
+    }
+
+    document.body.appendChild(overlay);
+    requestAnimationFrame(() => {
+      overlay.classList.add('modal-overlay--visible');
+    });
+
+    document.addEventListener('keydown', onKeyDown);
+    this.activeModalOverlay = overlay;
+  }
+
+  closeActiveModal() {
+    if (!this.activeModalOverlay) {
+      return;
+    }
+
+    this.activeModalOverlay.classList.remove('modal-overlay--visible');
+    window.setTimeout(() => {
+      this.activeModalOverlay?.remove();
+      this.activeModalOverlay = null;
+    }, 200);
   }
 
   renderLeaveReviewPage(companyId) {

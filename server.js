@@ -453,15 +453,53 @@ function mapCompaniesFromFirebase(snapshot) {
     const value = rawValue && typeof rawValue === 'object' ? rawValue : {};
     const ratingValue = Number.parseFloat(value.rating);
     const reviewsValue = Number.parseInt(value.reviews, 10);
-    const portfolioItems = Array.isArray(value.portfolio)
-      ? value.portfolio
-          .filter((item) => item && typeof item === 'object')
-          .map((item) => ({
+  const portfolioItems = Array.isArray(value.portfolio)
+    ? value.portfolio
+        .filter((item) => item && typeof item === 'object')
+        .map((item) => {
+          const rawGallery = Array.isArray(item.images)
+            ? item.images
+            : Array.isArray(item.photos)
+            ? item.photos
+            : Array.isArray(item.gallery)
+            ? item.gallery
+            : [];
+
+          const normalizedGallery = rawGallery
+            .map((entry) => {
+              if (typeof entry === 'string') {
+                return entry;
+              }
+
+              if (entry && typeof entry === 'object') {
+                return entry.url || entry.src || entry.image || entry.img || '';
+              }
+
+              return '';
+            })
+            .map((url) => url && url.toString().trim())
+            .filter((url) => Boolean(url));
+
+          const coverImage =
+            item.coverImage ||
+            item.cover ||
+            item.img ||
+            item.image ||
+            (normalizedGallery.length ? normalizedGallery[0] : '');
+
+          if (coverImage && !normalizedGallery.includes(coverImage)) {
+            normalizedGallery.unshift(coverImage);
+          }
+
+          return {
             title: item.title || item.name || 'Progetto',
             year: item.year || item.date || '',
-            img: item.img || item.image || ''
-          }))
-      : [];
+            img: coverImage || '',
+            description: item.description || item.details || item.text || '',
+            images: normalizedGallery
+          };
+        })
+    : [];
 
     const categories = Array.isArray(value.categories)
       ? value.categories.map((category) => category && category.toString()).filter(Boolean)
