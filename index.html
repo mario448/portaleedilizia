@@ -23,6 +23,7 @@
             <div class="flex items-center space-x-4" id="auth-actions">
                 <button id="login-button" class="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50" data-page="login">Accedi</button>
                 <button id="register-user-button" class="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700" data-page="register" data-register-type="user">Registrati</button>
+                <button id="messages-btn" class="hidden px-4 py-2 text-sm font-medium text-white bg-emerald-600 rounded-lg hover:bg-emerald-700" data-page="chats">Messaggi</button>
                 <div id="user-menu" class="hidden items-center space-x-3">
                     <div class="text-right leading-tight">
                         <p id="user-menu-name" class="text-sm font-semibold text-gray-700"></p>
@@ -380,6 +381,27 @@
         </div>
 
         <div id="page-leave-review" class="page max-w-2xl mx-auto bg-white p-8 rounded-xl shadow-lg"></div>
+
+        <div id="page-chats" class="page container mx-auto p-4 md:p-8">
+            <div class="chat-wrapper bg-white rounded-xl shadow-lg">
+                <aside class="chat-thread-list-wrapper">
+                    <div class="chat-section-header">
+                        <h2 class="chat-section-title">Conversazioni</h2>
+                    </div>
+                    <div id="chat-thread-list" class="chat-thread-list"></div>
+                </aside>
+                <section class="chat-conversation">
+                    <header id="chat-conversation-header" class="chat-conversation__header"></header>
+                    <div id="chat-messages" class="chat-messages"></div>
+                    <form id="chat-message-form" class="chat-message-form">
+                        <div class="chat-message-form__row">
+                            <textarea id="chat-message-input" class="chat-message-input" rows="2" placeholder="Scrivi un messaggio..." disabled></textarea>
+                            <button type="submit" class="chat-message-submit">Invia</button>
+                        </div>
+                    </form>
+                </section>
+            </div>
+        </div>
     </main>
 
     <footer class="bg-gray-800 text-white mt-12">

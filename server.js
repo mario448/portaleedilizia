@@ -244,8 +244,25 @@ async function firebaseDatabaseRequest(method, resourcePath, authToken, payload)
   const data = await response.json().catch(() => ({}));
 
   if (!response.ok) {
-    const message = data?.error || 'Errore nella comunicazione con Firebase Realtime Database';
-    throw new FirebaseError(message, response.status, 'FIREBASE_DB_ERROR');
+    const rawMessage = data?.error || 'Errore nella comunicazione con Firebase Realtime Database';
+
+    if (response.status === 401 || response.status === 403 || /permission/i.test(rawMessage || '')) {
+      throw new FirebaseError(
+        'Accesso al database Firebase negato. Controlla le regole di sicurezza e i token utilizzati.',
+        response.status,
+        'FIREBASE_PERMISSION_DENIED'
+      );
+    }
+
+    if (response.status === 404) {
+      throw new FirebaseError(
+        'Risorsa non trovata nel Realtime Database Firebase.',
+        response.status,
+        'FIREBASE_RESOURCE_NOT_FOUND'
+      );
+    }
+
+    throw new FirebaseError(rawMessage, response.status, 'FIREBASE_DB_ERROR');
   }
 
   return data;
@@ -261,6 +278,15 @@ function buildUserAccountResponse({ localId, email, displayName, role, idToken, 
     refreshToken,
     expiresIn
   };
+}
+
+function normalizeStringId(value) {
+  if (value === null || value === undefined) {
+    return null;
+  }
+
+  const stringValue = value.toString().trim();
+  return stringValue.length > 0 ? stringValue : null;
 }
 
 function normalizeRole(role) {
@@ -316,6 +342,403 @@ async function tryFetchProfileForRole(role, localId, idToken) {
 
     throw error;
   }
+}
+
+async function lookupAccountByIdToken(idToken) {
+  if (!idToken) {
+    throw new ApiError('ID token mancante. Effettua nuovamente il login.', 401, 'UNAUTHENTICATED');
+  }
+
+  const lookup = await firebaseAuthRequest('accounts:lookup', { idToken });
+  const user = lookup?.users?.[0];
+
+  if (!user || !user.localId) {
+    throw new ApiError('Sessione non valida o scaduta. Effettua nuovamente il login.', 401, 'UNAUTHENTICATED');
+  }
+
+  return {
+    localId: user.localId,
+    email: user.email || '',
+    displayName: user.displayName || ''
+  };
+}
+
+async function resolveAccountFromToken(idToken, preferredRole) {
+  const baseAccount = await lookupAccountByIdToken(idToken);
+  const { role, profile } = await resolveAccountProfile(baseAccount.localId, idToken, preferredRole);
+
+  const displayName =
+    profile.fullName ||
+    profile.companyName ||
+    profile.displayName ||
+    baseAccount.displayName ||
+    profile.email ||
+    baseAccount.email;
+
+  return {
+    localId: baseAccount.localId,
+    email: profile.email || baseAccount.email,
+    role,
+    displayName,
+    profile
+  };
+}
+
+async function getDatabaseWriteToken(fallbackToken) {
+  if (FIREBASE_SERVICE_EMAIL && FIREBASE_SERVICE_PASSWORD) {
+    try {
+      return await getServiceIdToken();
+    } catch (error) {
+      console.warn('Impossibile ottenere un token di servizio Firebase. Verrà utilizzato il token dell\'utente.', error);
+    }
+  }
+
+  return fallbackToken;
+}
+
+function buildChatThreadId(userId, companyId) {
+  return `chat_${userId}_${companyId}`;
+}
+
+function isParticipantOfThread(threadData, localId) {
+  if (!threadData || !localId) {
+    return false;
+  }
+
+  const participants = threadData.participants || {};
+  const profiles = threadData.participantProfiles || {};
+
+  return (
+    participants.user === localId ||
+    participants.company === localId ||
+    profiles.user?.id === localId ||
+    profiles.company?.id === localId
+  );
+}
+
+function trimMessagePreview(text, maxLength = 220) {
+  if (!text) {
+    return '';
+  }
+
+  if (text.length <= maxLength) {
+    return text;
+  }
+
+  return `${text.slice(0, maxLength - 3)}...`;
+}
+
+function parseUnreadCount(value) {
+  const parsed = Number.parseInt(value, 10);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : 0;
+}
+
+function isFirebasePermissionError(error) {
+  if (!(error instanceof FirebaseError)) {
+    return false;
+  }
+
+  if (error.code === 'FIREBASE_PERMISSION_DENIED') {
+    return true;
+  }
+
+  return error.status === 401 || error.status === 403 || /permission/i.test(error.message || '');
+}
+
+function isFirebaseNotFoundError(error) {
+  if (!(error instanceof FirebaseError)) {
+    return false;
+  }
+
+  if (error.code === 'FIREBASE_RESOURCE_NOT_FOUND') {
+    return true;
+  }
+
+  return error.status === 404;
+}
+
+function getMembershipPath(role, participantId, threadId) {
+  if (!participantId || !threadId) {
+    return null;
+  }
+
+  if (role === 'company') {
+    return `/companyChats/${participantId}/${threadId}.json`;
+  }
+
+  if (role === 'user') {
+    return `/userChats/${participantId}/${threadId}.json`;
+  }
+
+  return null;
+}
+
+async function getMembershipMetadata(role, participantId, threadId, dbToken) {
+  const path = getMembershipPath(role, participantId, threadId);
+  if (!path) {
+    return null;
+  }
+
+  try {
+    const snapshot = await firebaseDatabaseRequest('GET', path, dbToken);
+    if (!snapshot || typeof snapshot !== 'object') {
+      return null;
+    }
+    return snapshot;
+  } catch (error) {
+    if (isFirebasePermissionError(error)) {
+      throw new ApiError(
+        'Non hai i permessi necessari per accedere a questa conversazione. Aggiorna le regole di Firebase se necessario.',
+        403,
+        'CHAT_PERMISSION_DENIED'
+      );
+    }
+
+    if (isFirebaseNotFoundError(error)) {
+      return null;
+    }
+
+    throw error;
+  }
+}
+
+async function patchMembershipMetadata(role, participantId, threadId, dbToken, updates) {
+  const path = getMembershipPath(role, participantId, threadId);
+  if (!path || !updates || typeof updates !== 'object') {
+    return;
+  }
+
+  try {
+    await firebaseDatabaseRequest('PATCH', path, dbToken, updates);
+  } catch (error) {
+    if (isFirebasePermissionError(error)) {
+      throw new ApiError(
+        'Aggiornamento della conversazione non consentito per questo account. Controlla i permessi Firebase.',
+        403,
+        'CHAT_PERMISSION_DENIED'
+      );
+    }
+
+    throw error;
+  }
+}
+
+async function markThreadAsReadForAccount(account, threadId, dbToken, lastMessageAt) {
+  if (!account || !account.localId || !threadId) {
+    return null;
+  }
+
+  const participantRole = account.role === 'company' ? 'company' : 'user';
+  const updates = {
+    lastReadAt: lastMessageAt || new Date().toISOString(),
+    unreadCount: 0
+  };
+
+  await patchMembershipMetadata(participantRole, account.localId, threadId, dbToken, updates);
+  return updates;
+}
+
+async function syncMembershipAfterMessage({
+  role,
+  participantId,
+  threadId,
+  dbToken,
+  preview,
+  messageTimestamp,
+  senderRole,
+  isSender
+}) {
+  if (!participantId || !threadId) {
+    return 0;
+  }
+
+  const updates = {
+    updatedAt: messageTimestamp,
+    lastMessageAt: messageTimestamp,
+    lastMessagePreview: preview,
+    lastMessageAuthorRole: senderRole
+  };
+
+  if (isSender) {
+    updates.unreadCount = 0;
+    updates.lastReadAt = messageTimestamp;
+  } else {
+    const metadata = await getMembershipMetadata(role, participantId, threadId, dbToken);
+    const currentUnread = parseUnreadCount(metadata?.unreadCount);
+    updates.unreadCount = currentUnread + 1;
+  }
+
+  await patchMembershipMetadata(role, participantId, threadId, dbToken, updates);
+  return updates.unreadCount || 0;
+}
+
+function mapThreadForResponse(threadData) {
+  if (!threadData || typeof threadData !== 'object') {
+    return null;
+  }
+
+  const participants = threadData.participants || {};
+  const profiles = threadData.participantProfiles || {};
+
+  return {
+    id: threadData.id || null,
+    createdAt: threadData.createdAt || null,
+    updatedAt: threadData.updatedAt || threadData.lastMessageAt || threadData.createdAt || null,
+    lastMessageAt: threadData.lastMessageAt || threadData.updatedAt || threadData.createdAt || null,
+    lastMessagePreview: threadData.lastMessagePreview || '',
+    lastMessageAuthorRole: threadData.lastMessageAuthorRole || null,
+    lastReadAt: threadData.lastReadAt || null,
+    participants: {
+      userId: participants.user || profiles.user?.id || null,
+      companyId: participants.company || profiles.company?.id || null
+    },
+    user: {
+      id: profiles.user?.id || participants.user || null,
+      name: profiles.user?.name || '',
+      email: profiles.user?.email || ''
+    },
+    company: {
+      id: profiles.company?.id || participants.company || null,
+      name: profiles.company?.name || '',
+      email: profiles.company?.email || ''
+    }
+  };
+}
+
+function mapMessagesSnapshot(snapshot) {
+  if (!snapshot || typeof snapshot !== 'object') {
+    return [];
+  }
+
+  const messages = Object.entries(snapshot).map(([key, value]) => ({
+    id: key,
+    senderId: value?.senderId || null,
+    senderRole: value?.senderRole || null,
+    text: value?.text || '',
+    createdAt: value?.createdAt || null
+  }));
+
+  return messages.sort((a, b) => {
+    const dateA = a.createdAt ? new Date(a.createdAt).getTime() : 0;
+    const dateB = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+    return dateA - dateB;
+  });
+}
+
+async function ensureChatThread({
+  account,
+  idToken,
+  threadId,
+  userId,
+  companyId,
+  allowCreate
+}) {
+  const normalizedThreadId = normalizeStringId(threadId);
+  const normalizedUserId = normalizeStringId(userId) || (account.role === 'user' ? account.localId : null);
+  const normalizedCompanyId = normalizeStringId(companyId) || (account.role === 'company' ? account.localId : null);
+
+  const dbToken = await getDatabaseWriteToken(idToken);
+
+  if (normalizedThreadId) {
+    const existingThread = await firebaseDatabaseRequest('GET', `/chats/${normalizedThreadId}.json`, dbToken);
+
+    if (!existingThread || isEmptyObject(existingThread)) {
+      throw new ApiError('Conversazione non trovata.', 404, 'CHAT_NOT_FOUND');
+    }
+
+    existingThread.id = normalizedThreadId;
+
+    if (!isParticipantOfThread(existingThread, account.localId)) {
+      throw new ApiError('Accesso alla conversazione non consentito.', 403, 'CHAT_FORBIDDEN');
+    }
+
+    return { id: normalizedThreadId, data: existingThread, token: dbToken };
+  }
+
+  if (!allowCreate) {
+    throw new ApiError('Conversazione non trovata.', 404, 'CHAT_NOT_FOUND');
+  }
+
+  if (!normalizedUserId || !normalizedCompanyId) {
+    throw new ApiError('Impossibile avviare la chat: partecipanti mancanti.', 400, 'CHAT_PARTICIPANTS_MISSING');
+  }
+
+  const computedThreadId = buildChatThreadId(normalizedUserId, normalizedCompanyId);
+  let threadSnapshot = await firebaseDatabaseRequest('GET', `/chats/${computedThreadId}.json`, dbToken);
+
+  if (!threadSnapshot || isEmptyObject(threadSnapshot)) {
+    const companyProfile = await firebaseDatabaseRequest('GET', `/companies/${normalizedCompanyId}.json`, dbToken);
+
+    if (!companyProfile || isEmptyObject(companyProfile)) {
+      throw new ApiError('Impresa non trovata o non abilitata alla chat.', 404, 'COMPANY_NOT_FOUND');
+    }
+
+    const now = new Date().toISOString();
+    const userProfile = account.role === 'user' ? account.profile : await firebaseDatabaseRequest('GET', `/profiles/${normalizedUserId}.json`, dbToken);
+
+    const threadPayload = {
+      id: computedThreadId,
+      createdAt: now,
+      updatedAt: now,
+      participants: { user: normalizedUserId, company: normalizedCompanyId },
+      participantProfiles: {
+        user: {
+          id: normalizedUserId,
+          name:
+            userProfile?.fullName ||
+            userProfile?.displayName ||
+            account.displayName ||
+            userProfile?.email ||
+            account.email,
+          email: userProfile?.email || account.email || ''
+        },
+        company: {
+          id: normalizedCompanyId,
+          name: companyProfile.companyName || companyProfile.name || 'Impresa registrata',
+          email: companyProfile.email || ''
+        }
+      },
+      lastMessagePreview: '',
+      lastMessageAt: null,
+      lastMessageAuthorRole: null
+    };
+
+    await firebaseDatabaseRequest('PUT', `/chats/${computedThreadId}.json`, dbToken, threadPayload);
+
+    const userEntry = {
+      threadId: computedThreadId,
+      companyId: normalizedCompanyId,
+      companyName: threadPayload.participantProfiles.company.name,
+      createdAt: now,
+      updatedAt: now,
+      lastReadAt: now,
+      unreadCount: 0
+    };
+
+    await firebaseDatabaseRequest('PUT', `/userChats/${normalizedUserId}/${computedThreadId}.json`, dbToken, userEntry);
+
+    const companyEntry = {
+      threadId: computedThreadId,
+      userId: normalizedUserId,
+      userName: threadPayload.participantProfiles.user.name,
+      createdAt: now,
+      updatedAt: now,
+      lastReadAt: null,
+      unreadCount: 0
+    };
+
+    await firebaseDatabaseRequest('PUT', `/companyChats/${normalizedCompanyId}/${computedThreadId}.json`, dbToken, companyEntry);
+
+    threadSnapshot = threadPayload;
+  } else {
+    threadSnapshot.id = computedThreadId;
+  }
+
+  if (!isParticipantOfThread(threadSnapshot, account.localId)) {
+    throw new ApiError('Accesso alla conversazione non consentito.', 403, 'CHAT_FORBIDDEN');
+  }
+
+  return { id: computedThreadId, data: threadSnapshot, token: dbToken };
 }
 
 async function resolveAccountProfile(localId, idToken, preferredRole) {
@@ -441,6 +864,385 @@ async function handleLogin(body) {
       expiresIn: authData.expiresIn
     }),
     profile: { ...profile, role: resolvedRole }
+  };
+}
+
+async function handleChatOpen(body) {
+  const { idToken, threadId, companyId, role } = body;
+
+  if (!idToken) {
+    throw new ApiError('ID token mancante. Effettua nuovamente il login.', 401, 'UNAUTHENTICATED');
+  }
+
+  const account = await resolveAccountFromToken(idToken, role);
+
+  if (account.role === 'admin') {
+    throw new ApiError('Gli amministratori non possono avviare chat con le imprese.', 403, 'CHAT_FORBIDDEN');
+  }
+
+  const ensureResult = await ensureChatThread({
+    account,
+    idToken,
+    threadId,
+    userId: account.role === 'user' ? account.localId : null,
+    companyId,
+    allowCreate: account.role === 'user'
+  });
+
+  let messagesSnapshot = null;
+  try {
+    messagesSnapshot = await firebaseDatabaseRequest('GET', `/chats/${ensureResult.id}/messages.json`, ensureResult.token);
+  } catch (error) {
+    if (isFirebasePermissionError(error)) {
+      throw new ApiError(
+        'Non hai i permessi per leggere i messaggi di questa conversazione. Controlla le regole Firebase.',
+        403,
+        'CHAT_PERMISSION_DENIED'
+      );
+    }
+
+    if (!isFirebaseNotFoundError(error)) {
+      throw error;
+    }
+  }
+
+  const threadResponse = mapThreadForResponse(ensureResult.data);
+  const messages = mapMessagesSnapshot(messagesSnapshot);
+  const lastMessageTimestamp =
+    threadResponse?.lastMessageAt ||
+    (messages.length ? messages[messages.length - 1].createdAt : threadResponse?.createdAt) ||
+    new Date().toISOString();
+
+  const participantRole = account.role === 'company' ? 'company' : 'user';
+  const membershipMetadata = await getMembershipMetadata(
+    participantRole,
+    account.localId,
+    ensureResult.id,
+    ensureResult.token
+  );
+
+  if (threadResponse && membershipMetadata) {
+    threadResponse.unreadCount = parseUnreadCount(membershipMetadata.unreadCount);
+    threadResponse.lastReadAt = membershipMetadata.lastReadAt || threadResponse.lastReadAt || null;
+  }
+
+  await markThreadAsReadForAccount(account, ensureResult.id, ensureResult.token, lastMessageTimestamp);
+
+  if (threadResponse) {
+    threadResponse.unreadCount = 0;
+    threadResponse.lastReadAt = lastMessageTimestamp;
+  }
+
+  return {
+    success: true,
+    thread: threadResponse,
+    messages
+  };
+}
+
+async function handleChatList(body) {
+  const { idToken, role } = body;
+
+  if (!idToken) {
+    throw new ApiError('ID token mancante. Effettua nuovamente il login.', 401, 'UNAUTHENTICATED');
+  }
+
+  const account = await resolveAccountFromToken(idToken, role);
+
+  if (account.role === 'admin') {
+    return { success: true, threads: [] };
+  }
+
+  const dbToken = await getDatabaseWriteToken(idToken);
+  const membershipPath =
+    account.role === 'company'
+      ? `/companyChats/${account.localId}.json`
+      : `/userChats/${account.localId}.json`;
+
+  let membershipSnapshot = null;
+  try {
+    membershipSnapshot = await firebaseDatabaseRequest('GET', membershipPath, dbToken);
+  } catch (error) {
+    if (isFirebasePermissionError(error)) {
+      throw new ApiError(
+        'Non hai i permessi per consultare l\'elenco delle conversazioni. Verifica le regole di sicurezza Firebase.',
+        403,
+        'CHAT_PERMISSION_DENIED'
+      );
+    }
+
+    if (isFirebaseNotFoundError(error)) {
+      return { success: true, threads: [] };
+    }
+
+    throw error;
+  }
+
+  if (!membershipSnapshot || isEmptyObject(membershipSnapshot)) {
+    return { success: true, threads: [] };
+  }
+
+  const threads = [];
+
+  await Promise.all(
+    Object.keys(membershipSnapshot).map(async (threadId) => {
+      try {
+        const threadData = await firebaseDatabaseRequest('GET', `/chats/${threadId}.json`, dbToken);
+        if (!threadData || isEmptyObject(threadData)) {
+          return;
+        }
+
+        threadData.id = threadId;
+
+        if (!isParticipantOfThread(threadData, account.localId)) {
+          return;
+        }
+
+        const responseThread = mapThreadForResponse(threadData);
+        const metadata = membershipSnapshot[threadId];
+
+        if (metadata && typeof metadata === 'object') {
+          responseThread.updatedAt = metadata.updatedAt || responseThread.updatedAt;
+          responseThread.lastMessageAt = metadata.lastMessageAt || responseThread.lastMessageAt;
+          responseThread.lastReadAt = metadata.lastReadAt || responseThread.lastReadAt || null;
+          responseThread.unreadCount = parseUnreadCount(metadata.unreadCount);
+          if (!responseThread.lastMessagePreview && metadata.lastMessagePreview) {
+            responseThread.lastMessagePreview = metadata.lastMessagePreview;
+          }
+        } else {
+          responseThread.unreadCount = 0;
+        }
+
+        threads.push(responseThread);
+      } catch (error) {
+        console.warn(`Impossibile recuperare la chat ${threadId}:`, error);
+      }
+    })
+  );
+
+  threads.sort((a, b) => {
+    const dateA = a.updatedAt || a.lastMessageAt || a.createdAt || null;
+    const dateB = b.updatedAt || b.lastMessageAt || b.createdAt || null;
+    const timeA = dateA ? new Date(dateA).getTime() : 0;
+    const timeB = dateB ? new Date(dateB).getTime() : 0;
+    return timeB - timeA;
+  });
+
+  return { success: true, threads };
+}
+
+async function handleChatMessages(body) {
+  const { idToken, threadId, role } = body;
+
+  if (!idToken) {
+    throw new ApiError('ID token mancante. Effettua nuovamente il login.', 401, 'UNAUTHENTICATED');
+  }
+
+  const normalizedThreadId = normalizeStringId(threadId);
+  if (!normalizedThreadId) {
+    throw new ApiError('Conversazione non specificata.', 400, 'CHAT_REQUIRED');
+  }
+
+  const account = await resolveAccountFromToken(idToken, role);
+
+  if (account.role === 'admin') {
+    throw new ApiError('Gli amministratori non possono accedere alle chat delle imprese.', 403, 'CHAT_FORBIDDEN');
+  }
+
+  const dbToken = await getDatabaseWriteToken(idToken);
+  const threadData = await firebaseDatabaseRequest('GET', `/chats/${normalizedThreadId}.json`, dbToken);
+
+  if (!threadData || isEmptyObject(threadData)) {
+    throw new ApiError('Conversazione non trovata.', 404, 'CHAT_NOT_FOUND');
+  }
+
+  threadData.id = normalizedThreadId;
+
+  if (!isParticipantOfThread(threadData, account.localId)) {
+    throw new ApiError('Accesso alla conversazione non consentito.', 403, 'CHAT_FORBIDDEN');
+  }
+
+  let messagesSnapshot = null;
+  try {
+    messagesSnapshot = await firebaseDatabaseRequest('GET', `/chats/${normalizedThreadId}/messages.json`, dbToken);
+  } catch (error) {
+    if (isFirebasePermissionError(error)) {
+      throw new ApiError(
+        'Non hai i permessi per leggere i messaggi di questa conversazione. Controlla le regole Firebase.',
+        403,
+        'CHAT_PERMISSION_DENIED'
+      );
+    }
+
+    if (!isFirebaseNotFoundError(error)) {
+      throw error;
+    }
+  }
+
+  const threadResponse = mapThreadForResponse(threadData);
+  const messages = mapMessagesSnapshot(messagesSnapshot);
+  const lastMessageTimestamp =
+    threadResponse?.lastMessageAt ||
+    (messages.length ? messages[messages.length - 1].createdAt : threadResponse?.createdAt) ||
+    new Date().toISOString();
+
+  const participantRole = account.role === 'company' ? 'company' : 'user';
+  const membershipMetadata = await getMembershipMetadata(
+    participantRole,
+    account.localId,
+    normalizedThreadId,
+    dbToken
+  );
+
+  if (threadResponse && membershipMetadata) {
+    threadResponse.unreadCount = parseUnreadCount(membershipMetadata.unreadCount);
+    threadResponse.lastReadAt = membershipMetadata.lastReadAt || threadResponse.lastReadAt || null;
+  }
+
+  await markThreadAsReadForAccount(account, normalizedThreadId, dbToken, lastMessageTimestamp);
+
+  if (threadResponse) {
+    threadResponse.unreadCount = 0;
+    threadResponse.lastReadAt = lastMessageTimestamp;
+  }
+
+  return {
+    success: true,
+    thread: threadResponse,
+    messages
+  };
+}
+
+async function handleChatSend(body) {
+  const { idToken, text, threadId, companyId, role } = body;
+
+  if (!idToken) {
+    throw new ApiError('ID token mancante. Effettua nuovamente il login.', 401, 'UNAUTHENTICATED');
+  }
+
+  const trimmedText = typeof text === 'string' ? text.trim() : '';
+  if (!trimmedText) {
+    throw new ApiError('Il messaggio non può essere vuoto.', 400, 'CHAT_MESSAGE_EMPTY');
+  }
+
+  if (trimmedText.length > 2000) {
+    throw new ApiError('Il messaggio è troppo lungo (max 2000 caratteri).', 400, 'CHAT_MESSAGE_TOO_LONG');
+  }
+
+  const account = await resolveAccountFromToken(idToken, role);
+
+  if (account.role === 'admin') {
+    throw new ApiError('Gli amministratori non possono inviare messaggi nelle chat delle imprese.', 403, 'CHAT_FORBIDDEN');
+  }
+
+  const ensureResult = await ensureChatThread({
+    account,
+    idToken,
+    threadId,
+    userId: account.role === 'user' ? account.localId : null,
+    companyId,
+    allowCreate: account.role === 'user'
+  });
+
+  const dbToken = ensureResult.token;
+  const now = new Date().toISOString();
+
+  const messagePayload = {
+    senderId: account.localId,
+    senderRole: account.role,
+    text: trimmedText,
+    createdAt: now
+  };
+
+  const writeResult = await firebaseDatabaseRequest(
+    'POST',
+    `/chats/${ensureResult.id}/messages.json`,
+    dbToken,
+    messagePayload
+  );
+
+  const messageId = writeResult?.name || null;
+
+  const preview = trimMessagePreview(trimmedText);
+  const threadUpdate = {
+    updatedAt: now,
+    lastMessageAt: now,
+    lastMessagePreview: preview,
+    lastMessageAuthorRole: account.role
+  };
+
+  await firebaseDatabaseRequest('PATCH', `/chats/${ensureResult.id}.json`, dbToken, threadUpdate);
+
+  const userParticipant = ensureResult.data.participants?.user;
+  const companyParticipant = ensureResult.data.participants?.company;
+
+  const senderIsUser = account.role === 'user';
+  const senderIsCompany = account.role === 'company';
+
+  let senderUnreadCount = 0;
+
+  if (userParticipant) {
+    const unread = await syncMembershipAfterMessage({
+      role: 'user',
+      participantId: userParticipant,
+      threadId: ensureResult.id,
+      dbToken,
+      preview,
+      messageTimestamp: now,
+      senderRole: account.role,
+      isSender: senderIsUser
+    });
+
+    if (senderIsUser) {
+      senderUnreadCount = unread;
+    }
+  }
+
+  if (companyParticipant) {
+    const unread = await syncMembershipAfterMessage({
+      role: 'company',
+      participantId: companyParticipant,
+      threadId: ensureResult.id,
+      dbToken,
+      preview,
+      messageTimestamp: now,
+      senderRole: account.role,
+      isSender: senderIsCompany
+    });
+
+    if (senderIsCompany) {
+      senderUnreadCount = unread;
+    }
+  }
+
+  const refreshedThread = await firebaseDatabaseRequest(
+    'GET',
+    `/chats/${ensureResult.id}.json`,
+    dbToken
+  );
+
+  let responseThread = refreshedThread ? mapThreadForResponse({ ...refreshedThread, id: ensureResult.id }) : null;
+  if (!responseThread) {
+    if (refreshedThread) {
+      refreshedThread.id = ensureResult.id;
+    }
+    responseThread = mapThreadForResponse(refreshedThread || ensureResult.data);
+  }
+
+  if (responseThread) {
+    responseThread.unreadCount = senderUnreadCount;
+    if (senderUnreadCount === 0) {
+      responseThread.lastReadAt = now;
+    }
+  }
+
+  return {
+    success: true,
+    thread: responseThread,
+    message: {
+      id: messageId,
+      ...messagePayload
+    }
   };
 }
 
@@ -644,6 +1446,30 @@ async function handleApiRequest(req, res, url) {
 
   if (url.pathname === '/api/auth/login') {
     const result = await handleLogin(body);
+    sendJson(res, 200, result);
+    return;
+  }
+
+  if (url.pathname === '/api/chat/open') {
+    const result = await handleChatOpen(body);
+    sendJson(res, 200, result);
+    return;
+  }
+
+  if (url.pathname === '/api/chat/list') {
+    const result = await handleChatList(body);
+    sendJson(res, 200, result);
+    return;
+  }
+
+  if (url.pathname === '/api/chat/messages') {
+    const result = await handleChatMessages(body);
+    sendJson(res, 200, result);
+    return;
+  }
+
+  if (url.pathname === '/api/chat/send') {
+    const result = await handleChatSend(body);
     sendJson(res, 200, result);
     return;
   }

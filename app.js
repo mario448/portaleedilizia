@@ -225,6 +225,20 @@ class AuthManager {
     return result;
   }
 
+  getCurrentToken() {
+    const current = this.getCurrentUser();
+    return current && current.idToken ? current.idToken : null;
+  }
+
+  async requestWithToken(endpoint, payload = {}, tokenOverride) {
+    const token = tokenOverride || this.getCurrentToken();
+    if (!token) {
+      return { success: false, error: 'UNAUTHENTICATED' };
+    }
+
+    return this.post(endpoint, { ...payload, idToken: token });
+  }
+
   getCurrentUser() {
     if (!this.storage) return null;
     const stored = this.storage.getItem(this.sessionKey);
@@ -291,6 +305,13 @@ class App {
         .filter(Boolean)
     );
     this.pendingRegisterType = null;
+    this.chatThreads = [];
+    this.activeChatId = null;
+    this.activeChat = null;
+    this.chatMessages = [];
+    this.chatPollingInterval = null;
+    this.chatLoading = { threads: false, messages: false };
+    this.pendingChatCompanies = new Set();
   }
 
   escapeHtml(value) {
@@ -490,6 +511,83 @@ class App {
     this.remoteCompanyIds.add(firebaseId);
   }
 
+  ensureCompanyPlaceholderFromThread(thread) {
+    if (!thread || !thread.company) {
+      return null;
+    }
+
+    const firebaseId = thread.company.id || thread.company.firebaseId || null;
+    if (!firebaseId) {
+      return null;
+    }
+
+    const existing = this.data.companies.find((company) => {
+      if (!company) return false;
+      if (company.firebaseId && company.firebaseId.toString() === firebaseId.toString()) {
+        return true;
+      }
+      return company.id !== undefined && company.id !== null && company.id.toString() === firebaseId.toString();
+    });
+
+    if (existing) {
+      if (!existing.firebaseId) {
+        existing.firebaseId = firebaseId;
+      }
+      this.companyIdByFirebaseId.set(firebaseId, existing.id);
+      this.remoteCompanyIds.add(firebaseId);
+      return existing;
+    }
+
+    const newId = this.generateCompanyId();
+    const placeholder = {
+      id: newId,
+      firebaseId,
+      name: thread.company.name || 'Impresa registrata',
+      companyName: thread.company.name || 'Impresa registrata',
+      region: '',
+      province: '',
+      rating: 0,
+      reviews: 0,
+      verified: false,
+      status: 'pending',
+      categories: [],
+      description: "Dettagli dell'impresa in caricamento...",
+      contactName: '',
+      phone: '',
+      email: thread.company.email || '',
+      vatNumber: '',
+      createdAt: new Date().toISOString(),
+      portfolio: []
+    };
+
+    this.data.companies.push(placeholder);
+    this.companyIdByFirebaseId.set(firebaseId, newId);
+    this.remoteCompanyIds.add(firebaseId);
+    return placeholder;
+  }
+
+  hydrateThreadParticipants(thread) {
+    if (!thread || typeof thread !== 'object') {
+      return thread;
+    }
+
+    const hydrated = { ...thread };
+
+    if (thread.company && thread.company.id) {
+      const companyProfile = this.getCompanyById(thread.company.id) || this.ensureCompanyPlaceholderFromThread(thread);
+      if (companyProfile) {
+        hydrated.company = {
+          ...thread.company,
+          id: companyProfile.firebaseId || companyProfile.id,
+          name: companyProfile.companyName || companyProfile.name || thread.company.name,
+          email: companyProfile.email || thread.company.email || ''
+        };
+      }
+    }
+
+    return hydrated;
+  }
+
   resolveCompanyId(firebaseId) {
     if (!firebaseId) {
       return null;
@@ -612,6 +710,8 @@ class App {
 
     let hasUpdates = false;
 
+    const activatedCompanies = [];
+
     remoteCompanies.forEach((remoteCompany) => {
       if (!remoteCompany || typeof remoteCompany !== 'object') {
         return;
@@ -626,6 +726,17 @@ class App {
       const previousSnapshot = existing ? { ...existing } : null;
 
       this.addPendingCompanyFromRemote(remoteCompany, existing || {});
+
+      const localCompany = this.data.companies.find((company) => company.firebaseId === firebaseId);
+      if (
+        localCompany &&
+        localCompany.id !== undefined &&
+        localCompany.id !== null &&
+        this.pendingChatCompanies.has(localCompany.id.toString()) &&
+        this.canChatWithCompany(localCompany)
+      ) {
+        activatedCompanies.push(localCompany);
+      }
 
       if (!existing) {
         hasUpdates = true;
@@ -671,6 +782,39 @@ class App {
         this.renderCompanyProfile(activeCompany, { activeTab: this.activeCompanyTab });
       }
     }
+
+    if (activatedCompanies.length) {
+      activatedCompanies.forEach((company) => {
+        if (company.id !== undefined && company.id !== null) {
+          this.pendingChatCompanies.delete(company.id.toString());
+        }
+      });
+    }
+
+    if (activatedCompanies.length && this.currentUser && this.currentUser.role === 'user') {
+      activatedCompanies.forEach((company, index) => {
+        this.showNotification(
+          `La chat con ${company.companyName || company.name || 'l\'impresa selezionata'} è ora disponibile.`,
+          'info',
+          5000
+        );
+        window.setTimeout(() => {
+          this.startChatWithCompany(company);
+        }, 150 * (index + 1));
+      });
+    }
+
+    if (this.chatThreads.length) {
+      this.chatThreads = this.chatThreads.map((thread) => this.hydrateThreadParticipants(thread));
+      this.renderChatThreads();
+      if (this.activeChatId) {
+        const refreshed = this.chatThreads.find((thread) => thread.id === this.activeChatId);
+        if (refreshed) {
+          this.activeChat = refreshed;
+          this.renderChatConversation();
+        }
+      }
+    }
   }
 
   async loadRemoteData() {
@@ -708,11 +852,14 @@ class App {
     this.setupFilters();
     this.bindAuthForms();
     this.bindLogout();
+    this.setupChatPage();
 
     this.navigate('home');
     this.renderFeaturedCompanies();
     this.renderAdminDashboard();
     this.updateAuthUI();
+    this.renderChatThreads();
+    this.renderChatConversation();
     this.loadRemoteData();
   }
 
@@ -881,6 +1028,7 @@ class App {
         }
 
         this.currentUser = loginResult.account;
+        await this.refreshChatThreads({ silent: true });
         this.updateAuthUI();
         loginForm.reset();
         this.showFormFeedback(loginForm, 'success', 'Accesso riuscito! Stiamo preparando il tuo spazio.');
@@ -934,10 +1082,547 @@ class App {
     logoutButton.addEventListener('click', () => {
       this.auth.logout();
       this.currentUser = null;
+      this.stopChatPolling();
+      this.resetChatState();
       this.updateAuthUI();
       this.showNotification('Hai effettuato il logout. A presto!', 'info', 4000);
+      this.renderChatThreads();
+      this.renderChatConversation();
       this.navigate('home');
     });
+  }
+
+  setupChatPage() {
+    const messageForm = document.getElementById('chat-message-form');
+    if (messageForm) {
+      messageForm.addEventListener('submit', (event) => {
+        event.preventDefault();
+        this.handleChatFormSubmit(messageForm);
+      });
+    }
+  }
+
+  resetChatState() {
+    this.chatThreads = [];
+    this.activeChatId = null;
+    this.activeChat = null;
+    this.chatMessages = [];
+    this.pendingChatCompanies.clear();
+  }
+
+  startChatPolling() {
+    if (this.chatPollingInterval) {
+      return;
+    }
+
+    this.chatPollingInterval = window.setInterval(async () => {
+      if (!this.currentUser || this.currentPage !== 'chats') {
+        return;
+      }
+
+      await this.refreshChatThreads({ silent: true, skipConversationUpdate: true });
+      if (this.activeChatId) {
+        await this.loadChatMessages(this.activeChatId, { silent: true });
+      }
+    }, 8000);
+  }
+
+  stopChatPolling() {
+    if (this.chatPollingInterval) {
+      window.clearInterval(this.chatPollingInterval);
+      this.chatPollingInterval = null;
+    }
+  }
+
+  async handleChatFormSubmit(form) {
+    const input = form.querySelector('#chat-message-input');
+    const submitButton = form.querySelector('button[type="submit"]');
+    if (!input) {
+      return;
+    }
+
+    const rawValue = input.value;
+    const trimmed = rawValue.trim();
+    if (!trimmed) {
+      input.value = rawValue.trimStart();
+      return;
+    }
+
+    input.disabled = true;
+    if (submitButton) submitButton.disabled = true;
+
+    const success = await this.sendChatMessage(trimmed);
+
+    if (success) {
+      input.value = '';
+    } else {
+      input.value = rawValue;
+    }
+
+    input.disabled = false;
+    if (submitButton) submitButton.disabled = false;
+    input.focus();
+  }
+
+  async sendChatMessage(text) {
+    if (!this.currentUser) {
+      this.showNotification('Per inviare messaggi devi effettuare il login.', 'error', 5000);
+      return false;
+    }
+
+    if (!this.activeChatId && !this.activeChat && this.currentUser.role !== 'user') {
+      this.showNotification('Seleziona una conversazione prima di inviare un messaggio.', 'error', 4000);
+      return false;
+    }
+
+    const payload = {
+      text,
+      role: this.currentUser.role
+    };
+
+    if (this.activeChatId) {
+      payload.threadId = this.activeChatId;
+    } else if (this.activeChat && this.currentUser.role === 'user') {
+      const companyId = this.getCompanyChatId(this.activeChat?.company);
+      if (companyId) {
+        payload.companyId = companyId;
+      }
+    }
+
+    const result = await this.auth.requestWithToken('/api/chat/send', payload);
+
+    if (!result || !result.success) {
+      this.showNotification(this.getAuthErrorMessage(result?.error, result?.message), 'error', 5000);
+      return false;
+    }
+
+    if (result.thread) {
+      this.activeChat = result.thread;
+      this.activeChatId = result.thread.id || this.activeChatId;
+      this.upsertChatThread(result.thread);
+    }
+
+    if (Array.isArray(this.chatMessages)) {
+      const newMessage = result.message;
+      if (newMessage) {
+        this.chatMessages = [...this.chatMessages, newMessage].sort((a, b) => {
+          const timeA = a.createdAt ? new Date(a.createdAt).getTime() : 0;
+          const timeB = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+          return timeA - timeB;
+        });
+      }
+    }
+
+    await this.refreshChatThreads({ silent: true });
+    this.renderChatConversation();
+    this.renderChatMessages();
+    this.scrollChatToBottom(true);
+    return true;
+  }
+
+  async refreshChatThreads(options = {}) {
+    if (!this.currentUser) {
+      this.chatThreads = [];
+      this.renderChatThreads();
+      return;
+    }
+
+    const result = await this.auth.requestWithToken('/api/chat/list', {
+      role: this.currentUser.role
+    });
+
+    if (!result || !result.success) {
+      if (!options.silent) {
+        this.showNotification(this.getAuthErrorMessage(result?.error, result?.message), 'error', 5000);
+      }
+      return;
+    }
+
+    const fetchedThreads = Array.isArray(result.threads) ? result.threads : [];
+
+    this.chatThreads = fetchedThreads.map((thread) => {
+      const hydrated = this.hydrateThreadParticipants(thread);
+      if (hydrated?.company?.id) {
+        this.remoteCompanyIds.add(hydrated.company.id);
+      }
+      return hydrated;
+    });
+
+    this.chatThreads.sort((a, b) => {
+      const dateA = a?.updatedAt || a?.lastMessageAt || a?.createdAt || null;
+      const dateB = b?.updatedAt || b?.lastMessageAt || b?.createdAt || null;
+      const timeA = dateA ? new Date(dateA).getTime() : 0;
+      const timeB = dateB ? new Date(dateB).getTime() : 0;
+      return timeB - timeA;
+    });
+
+    if (this.activeChatId) {
+      const updatedThread = this.chatThreads.find((thread) => thread.id === this.activeChatId);
+      if (updatedThread) {
+        this.activeChat = updatedThread;
+      } else {
+        this.activeChatId = null;
+        this.activeChat = null;
+        this.chatMessages = [];
+      }
+    }
+
+    this.renderChatThreads();
+    if (!options.skipConversationUpdate) {
+      this.renderChatConversation();
+    }
+  }
+
+  upsertChatThread(thread) {
+    if (!thread || !thread.id) {
+      return;
+    }
+
+    const hydrated = this.hydrateThreadParticipants(thread);
+    const index = this.chatThreads.findIndex((item) => item && item.id === hydrated.id);
+
+    if (hydrated?.company?.id) {
+      this.remoteCompanyIds.add(hydrated.company.id);
+    }
+
+    if (index >= 0) {
+      this.chatThreads[index] = {
+        ...this.chatThreads[index],
+        ...hydrated
+      };
+    } else {
+      this.chatThreads.push(hydrated);
+    }
+
+    this.chatThreads.sort((a, b) => {
+      const dateA = a?.updatedAt || a?.lastMessageAt || a?.createdAt || null;
+      const dateB = b?.updatedAt || b?.lastMessageAt || b?.createdAt || null;
+      const timeA = dateA ? new Date(dateA).getTime() : 0;
+      const timeB = dateB ? new Date(dateB).getTime() : 0;
+      return timeB - timeA;
+    });
+  }
+
+  renderChatThreads() {
+    const container = document.getElementById('chat-thread-list');
+    if (!container) return;
+
+    if (!this.currentUser) {
+      container.innerHTML = '<p class="chat-placeholder">Effettua l\'accesso per avviare una conversazione con le imprese.</p>';
+      return;
+    }
+
+    if (!this.chatThreads.length) {
+      container.innerHTML = '<p class="chat-placeholder">Non ci sono conversazioni attive. Apri il profilo di un\'impresa per iniziare a chattare.</p>';
+      return;
+    }
+
+    container.innerHTML = this.chatThreads
+      .map((thread) => {
+        const counterpart = this.getChatCounterpart(thread);
+        const title = counterpart?.name || (thread.company?.name || thread.user?.name) || 'Conversazione';
+        const preview = thread.lastMessagePreview || 'Nessun messaggio';
+        const dateLabel = this.formatChatRelativeTime(thread.lastMessageAt || thread.updatedAt || thread.createdAt);
+        const isActive = this.activeChatId && thread.id === this.activeChatId;
+        const unreadCount = Number.isFinite(Number(thread.unreadCount)) ? Number(thread.unreadCount) : 0;
+        const unreadLabel = unreadCount > 99 ? '99+' : unreadCount.toString();
+        const unreadBadge = unreadCount
+          ? `<span class="chat-thread__badge" aria-hidden="true">${this.escapeHtml(unreadLabel)}</span>`
+          : '';
+        const unreadDescription = unreadCount
+          ? ` aria-label="${this.escapeHtml(unreadCount === 1 ? '1 messaggio non letto' : `${unreadCount} messaggi non letti`)}"`
+          : '';
+        return `
+          <button type="button" class="chat-thread ${isActive ? 'chat-thread--active' : ''}" data-chat-thread="${thread.id}"${unreadDescription}>
+            <div class="chat-thread__top">
+              <div class="chat-thread__title">${this.escapeHtml(title)}</div>
+              ${unreadBadge}
+            </div>
+            <div class="chat-thread__preview">${this.escapeHtml(preview)}</div>
+            <div class="chat-thread__meta">${this.escapeHtml(dateLabel)}</div>
+          </button>
+        `;
+      })
+      .join('');
+
+    const items = container.querySelectorAll('[data-chat-thread]');
+    items.forEach((item) => {
+      item.addEventListener('click', () => {
+        const threadId = item.getAttribute('data-chat-thread');
+        this.selectChatThread(threadId);
+      });
+    });
+  }
+
+  formatChatRelativeTime(dateInput) {
+    if (!dateInput) return '';
+    const parsed = new Date(dateInput);
+    if (Number.isNaN(parsed.getTime())) return '';
+
+    const now = new Date();
+    const sameDay = parsed.toDateString() === now.toDateString();
+
+    if (sameDay) {
+      return parsed.toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' });
+    }
+
+    return parsed.toLocaleDateString('it-IT', { day: '2-digit', month: '2-digit' });
+  }
+
+  formatChatMessageTimestamp(dateInput) {
+    if (!dateInput) return '';
+    const parsed = new Date(dateInput);
+    if (Number.isNaN(parsed.getTime())) return '';
+
+    return parsed.toLocaleString('it-IT', {
+      day: '2-digit',
+      month: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit'
+    });
+  }
+
+  renderChatConversation() {
+    const header = document.getElementById('chat-conversation-header');
+    const form = document.getElementById('chat-message-form');
+    const input = document.getElementById('chat-message-input');
+    const submitButton = form?.querySelector('button[type="submit"]') || null;
+
+    if (!header || !form || !input) {
+      return;
+    }
+
+    if (!this.currentUser) {
+      header.innerHTML = '<h2 class="text-xl font-semibold text-slate-700">Accedi per inviare messaggi</h2><p class="text-sm text-slate-500">Seleziona "Accedi" nella barra in alto e riprendi le tue conversazioni.</p>';
+      input.value = '';
+      input.disabled = true;
+      if (submitButton) submitButton.disabled = true;
+      this.chatMessages = [];
+      this.renderChatMessages();
+      return;
+    }
+
+    if (!this.activeChat) {
+      header.innerHTML = '<h2 class="text-xl font-semibold text-slate-700">Seleziona una conversazione</h2><p class="text-sm text-slate-500">Scegli un\'impresa dal menu a sinistra oppure apri una nuova chat da un profilo aziendale.</p>';
+      input.disabled = true;
+      if (submitButton) submitButton.disabled = true;
+      this.chatMessages = [];
+      this.renderChatMessages();
+      return;
+    }
+
+    const counterpart = this.getChatCounterpart(this.activeChat);
+    const title = counterpart?.name || (this.activeChat.company?.name || this.activeChat.user?.name) || 'Conversazione';
+    const infoLine = counterpart?.email ? `<p class="text-xs text-slate-500">${this.escapeHtml(counterpart.email)}</p>` : '';
+
+    header.innerHTML = `
+      <h2 class="text-xl font-semibold text-slate-700">${this.escapeHtml(title)}</h2>
+      ${infoLine}
+    `;
+
+    input.disabled = false;
+    if (submitButton) submitButton.disabled = false;
+    this.renderChatMessages();
+  }
+
+  renderChatMessages() {
+    const container = document.getElementById('chat-messages');
+    if (!container) return;
+
+    if (!this.currentUser || !this.activeChat) {
+      container.innerHTML = '';
+      return;
+    }
+
+    if (!this.chatMessages.length) {
+      container.innerHTML = '<p class="chat-placeholder chat-placeholder--inner">Scrivi il primo messaggio per avviare la conversazione.</p>';
+      return;
+    }
+
+    container.innerHTML = this.chatMessages
+      .map((message) => {
+        const isOwn = message.senderRole === this.currentUser.role;
+        const bubbleClass = isOwn ? 'chat-message chat-message--own' : 'chat-message';
+        const timeLabel = this.formatChatMessageTimestamp(message.createdAt);
+        const safeText = this.escapeHtml(message.text).replace(/\r?\n/g, '<br>');
+        return `
+          <div class="${bubbleClass}">
+            <div class="chat-message__content">${safeText}</div>
+            <div class="chat-message__time">${this.escapeHtml(timeLabel)}</div>
+          </div>
+        `;
+      })
+      .join('');
+
+    this.scrollChatToBottom();
+  }
+
+  scrollChatToBottom(force = false) {
+    const container = document.getElementById('chat-messages');
+    if (!container) return;
+
+    if (force) {
+      container.scrollTop = container.scrollHeight;
+      return;
+    }
+
+    window.requestAnimationFrame(() => {
+      container.scrollTop = container.scrollHeight;
+    });
+  }
+
+  async selectChatThread(threadId) {
+    if (!threadId) return;
+    if (this.activeChatId === threadId && this.chatMessages.length) {
+      return;
+    }
+
+    this.activeChatId = threadId;
+    const selected = this.chatThreads.find((thread) => thread.id === threadId);
+    this.activeChat = selected || null;
+    this.renderChatConversation();
+    await this.loadChatMessages(threadId);
+  }
+
+  async loadChatMessages(threadId, options = {}) {
+    if (!this.currentUser || !threadId) {
+      return;
+    }
+
+    const result = await this.auth.requestWithToken('/api/chat/messages', {
+      threadId,
+      role: this.currentUser.role
+    });
+
+    if (!result || !result.success) {
+      if (!options.silent) {
+        this.showNotification(this.getAuthErrorMessage(result?.error, result?.message), 'error', 5000);
+      }
+      return;
+    }
+
+    if (result.thread) {
+      this.activeChat = result.thread;
+      this.activeChatId = result.thread.id || threadId;
+      this.upsertChatThread(result.thread);
+    }
+
+    this.chatMessages = Array.isArray(result.messages) ? result.messages : [];
+    this.renderChatConversation();
+    this.renderChatThreads();
+    this.renderChatMessages();
+    this.scrollChatToBottom(true);
+  }
+
+  getChatCounterpart(thread) {
+    if (!thread) return null;
+    if (!this.currentUser) return thread.company || thread.user || null;
+
+    if (this.currentUser.role === 'company') {
+      return thread.user || null;
+    }
+
+    if (this.currentUser.role === 'user') {
+      return thread.company || null;
+    }
+
+    return thread.company || thread.user || null;
+  }
+
+  getCompanyChatId(company) {
+    if (!company) return null;
+    if (company.firebaseId) return company.firebaseId;
+    if (company.id) return company.id;
+    return null;
+  }
+
+  canChatWithCompany(company) {
+    const identifier = this.getCompanyChatId(company);
+    if (!identifier) {
+      return false;
+    }
+
+    if (company && company.firebaseId) {
+      return true;
+    }
+
+    return this.remoteCompanyIds.has(identifier);
+  }
+
+  getCompanyById(companyId) {
+    if (companyId === null || companyId === undefined) {
+      return null;
+    }
+
+    const normalized = companyId.toString();
+
+    return (
+      this.data.companies.find((item) => {
+        if (!item) return false;
+        if (item.id !== undefined && item.id !== null && item.id.toString() === normalized) {
+          return true;
+        }
+        if (item.firebaseId && item.firebaseId.toString() === normalized) {
+          return true;
+        }
+        return false;
+      }) || null
+    );
+  }
+
+  async startChatWithCompany(company) {
+    if (!company) {
+      return;
+    }
+
+    if (!this.canChatWithCompany(company)) {
+      if (company.id !== undefined && company.id !== null) {
+        this.pendingChatCompanies.add(company.id.toString());
+      }
+      this.showNotification(
+        'La chat sarà disponibile non appena completeremo la verifica di questa impresa. Ti avviseremo appena sarà pronta.',
+        'error',
+        5000
+      );
+      return;
+    }
+
+    if (!this.currentUser) {
+      this.showNotification('Per contattare un\'impresa devi prima accedere alla piattaforma.', 'error', 5000);
+      this.navigate('login');
+      return;
+    }
+
+    if (this.currentUser.role === 'admin') {
+      this.showNotification('Gli amministratori non possono avviare chat con le imprese.', 'error', 5000);
+      return;
+    }
+
+    const companyId = this.getCompanyChatId(company);
+    const result = await this.auth.requestWithToken('/api/chat/open', {
+      companyId,
+      role: this.currentUser.role
+    });
+
+    if (!result || !result.success) {
+      this.showNotification(this.getAuthErrorMessage(result?.error, result?.message), 'error', 5000);
+      return;
+    }
+
+    if (company.id !== undefined && company.id !== null) {
+      this.pendingChatCompanies.delete(company.id.toString());
+    }
+
+    this.activeChat = result.thread || null;
+    this.activeChatId = result.thread?.id || null;
+    this.chatMessages = Array.isArray(result.messages) ? result.messages : [];
+    if (result.thread) {
+      this.upsertChatThread(result.thread);
+    }
+    await this.refreshChatThreads({ silent: true });
+    this.renderChatConversation();
+    this.renderChatMessages();
+    this.navigate('chats');
   }
 
   updateAuthUI() {
@@ -947,6 +1632,7 @@ class App {
     const userNameLabel = document.getElementById('user-menu-name');
     const userRoleLabel = document.getElementById('user-menu-role');
     const adminButton = document.getElementById('admin-btn');
+    const messagesButton = document.getElementById('messages-btn');
 
     if (this.currentUser) {
       if (loginButton) loginButton.classList.add('hidden');
@@ -964,6 +1650,13 @@ class App {
           adminButton.classList.add('hidden');
         }
       }
+      if (messagesButton) {
+        if (this.currentUser.role === 'admin') {
+          messagesButton.classList.add('hidden');
+        } else {
+          messagesButton.classList.remove('hidden');
+        }
+      }
     } else {
       if (loginButton) loginButton.classList.remove('hidden');
       if (registerButton) registerButton.classList.remove('hidden');
@@ -974,9 +1667,14 @@ class App {
       if (adminButton) {
         adminButton.classList.add('hidden');
       }
+      if (messagesButton) {
+        messagesButton.classList.add('hidden');
+      }
     }
 
     this.updateSessionBanner();
+    this.renderChatThreads();
+    this.renderChatConversation();
   }
 
   updateSessionBanner() {
@@ -1143,23 +1841,36 @@ class App {
   }
 
   navigate(pageId) {
+    let destination = pageId;
+    if (destination === 'chats' && !this.currentUser) {
+      this.showNotification('Per accedere ai messaggi devi effettuare il login.', 'error', 5000);
+      destination = 'login';
+    }
+
     this.closeActiveModal();
     this.pages.forEach((page) => page.classList.remove('active'));
-    const targetPage = document.getElementById(`page-${pageId}`);
+    const targetPage = document.getElementById(`page-${destination}`);
     if (targetPage) {
       targetPage.classList.add('active');
       window.scrollTo({ top: 0, behavior: 'smooth' });
-      this.currentPage = pageId;
-      if (pageId !== 'company-profile') {
+      this.currentPage = destination;
+      if (destination !== 'company-profile') {
         this.activeCompanyId = null;
       }
-      if (pageId === 'register') {
+      if (destination === 'register') {
         const desiredType = this.pendingRegisterType || 'user';
         this.setRegisterFormType(desiredType);
         this.pendingRegisterType = null;
       }
+      if (destination === 'chats') {
+        this.refreshChatThreads({ silent: true });
+        this.renderChatConversation();
+        this.startChatPolling();
+      } else {
+        this.stopChatPolling();
+      }
     } else {
-      console.error(`Page with id 'page-${pageId}' not found.`);
+      console.error(`Page with id 'page-${destination}' not found.`);
     }
   }
 
@@ -1242,12 +1953,13 @@ class App {
           return;
         }
 
-        const companyId = Number.parseInt(card.getAttribute('data-company-id'), 10);
-        if (!Number.isFinite(companyId)) {
+        const companyId = card.getAttribute('data-company-id');
+        const company = this.getCompanyById(companyId);
+        if (!company) {
           return;
         }
 
-        this.showCompanyProfile(companyId, { activeTab: 'info' });
+        this.showCompanyProfile(company.id, { activeTab: 'info' });
       });
     });
 
@@ -1257,16 +1969,17 @@ class App {
         event.preventDefault();
         event.stopPropagation();
 
-        const companyId = Number.parseInt(button.getAttribute('data-company-id'), 10);
-        if (!Number.isFinite(companyId)) {
+        const companyId = button.getAttribute('data-company-id');
+        const company = this.getCompanyById(companyId);
+        if (!company) {
           return;
         }
 
         const trigger = button.getAttribute('data-company-trigger');
         if (trigger === 'reviews') {
-          this.showCompanyProfile(companyId, { activeTab: 'reviews', focusReviews: true });
+          this.showCompanyProfile(company.id, { activeTab: 'reviews', focusReviews: true });
         } else {
-          this.showCompanyProfile(companyId, { activeTab: 'info' });
+          this.showCompanyProfile(company.id, { activeTab: 'info' });
         }
       });
     });
@@ -1399,6 +2112,14 @@ class App {
 
     const reviewCount = companyReviews.length;
 
+    const chatAvailable = this.canChatWithCompany(company);
+    const chatButtonLabel = !chatAvailable
+      ? 'Chat non disponibile'
+      : this.currentUser && this.currentUser.role !== 'admin'
+      ? 'Apri chat privata'
+      : 'Accedi per scrivere';
+    const chatButtonAttributes = chatAvailable ? `data-company-chat="${this.getCompanyChatId(company)}"` : 'disabled';
+
     container.innerHTML = `
       <div class="bg-white p-6 md:p-8 rounded-xl shadow-lg">
         <div class="flex flex-col md:flex-row gap-6 items-start border-b pb-6 mb-6">
@@ -1414,9 +2135,14 @@ class App {
             </div>
           </div>
           <div class="flex-shrink-0 w-full md:w-auto">
-            <button class="w-full px-6 py-3 bg-blue-600 text-white font-semibold rounded-md hover:bg-blue-700 transition" type="button">
-              <i class="fas fa-envelope mr-2"></i>Contatta l'Impresa
+            <button class="w-full px-6 py-3 bg-blue-600 text-white font-semibold rounded-md hover:bg-blue-700 transition disabled:opacity-50 disabled:cursor-not-allowed" type="button" ${chatButtonAttributes}>
+              <i class="fas fa-comments mr-2"></i>${chatButtonLabel}
             </button>
+            ${
+              chatAvailable
+                ? ''
+                : '<p class="mt-2 text-xs text-slate-500">La chat sarà disponibile quando l\'impresa completerà la verifica.</p>'
+            }
           </div>
         </div>
 
@@ -1533,11 +2259,15 @@ class App {
     this.setupCompanyTabs(container);
     this.setupPortfolioProjects(company);
     this.setupReviewCards(company, companyReviews);
+    this.setupCompanyContactAction(container, company);
     const reviewButton = container.querySelector('[data-company-review]');
     if (reviewButton) {
       reviewButton.addEventListener('click', () => {
-        const companyId = Number(reviewButton.getAttribute('data-company-review'));
-        this.showLeaveReviewPage(companyId);
+        const companyIdentifier = reviewButton.getAttribute('data-company-review');
+        const reviewCompany = this.getCompanyById(companyIdentifier);
+        if (reviewCompany) {
+          this.showLeaveReviewPage(reviewCompany.id);
+        }
       });
     }
 
@@ -1586,6 +2316,28 @@ class App {
           }
         });
       });
+    });
+  }
+
+  setupCompanyContactAction(container, company) {
+    if (!container || !company) {
+      return;
+    }
+
+    const chatButton = container.querySelector('[data-company-chat]');
+    if (!chatButton) {
+      return;
+    }
+
+    chatButton.addEventListener('click', (event) => {
+      event.preventDefault();
+      if (chatButton.disabled) {
+        return;
+      }
+
+      const identifier = chatButton.getAttribute('data-company-chat');
+      const targetCompany = this.getCompanyById(identifier) || company;
+      this.startChatWithCompany(targetCompany);
     });
   }
 
@@ -1839,7 +2591,7 @@ class App {
   }
 
   renderLeaveReviewPage(companyId) {
-    const company = this.data.companies.find((item) => item.id === companyId);
+    const company = this.getCompanyById(companyId);
     const container = document.getElementById('page-leave-review');
     if (!company || !container) return;
 
@@ -1968,7 +2720,7 @@ class App {
   }
 
   showCompanyProfile(companyId, options = {}) {
-    const company = this.data.companies.find((item) => item.id === companyId);
+    const company = this.getCompanyById(companyId);
     if (!company) return;
 
     this.activeCompanyId = company.id;
@@ -1977,7 +2729,10 @@ class App {
   }
 
   showLeaveReviewPage(companyId) {
-    this.renderLeaveReviewPage(companyId);
+    const company = this.getCompanyById(companyId);
+    if (!company) return;
+
+    this.renderLeaveReviewPage(company.id);
     this.navigate('leave-review');
   }
 

@@ -40,6 +40,48 @@ All'avvio l'interfaccia richiede al server il contenuto della route `GET /api/pu
 - Form per lasciare una recensione con interazione sulle stelle (demo, non salva i dati).
 - Registrazione e accesso per utenti, imprese e amministratori mediante Firebase Authentication con salvataggio dei profili nel Realtime Database.
 - Un unico form di registrazione che guida la scelta tra profilo privato e impresa, mostrando i campi necessari per ciascuna tipologia.
+- Chat privata tra utenti e imprese con cronologia messaggi sincronizzata su Firebase, accessibile solo ai partecipanti alla conversazione.
+
+### Struttura dati per la chat
+
+Per utilizzare la messaggistica assicurati che nel Realtime Database siano presenti (o che le regole consentano la creazione runtime) i nodi:
+
+- `chats`: contiene i thread con partecipanti, metadati e ultimi messaggi.
+- `userChats`: indice delle chat per singolo utente (`userChats/<uid>/<threadId>`).
+- `companyChats`: indice delle chat per singola impresa (`companyChats/<companyId>/<threadId>`).
+
+Ogni messaggio viene salvato in `chats/<threadId>/messages` con il ruolo del mittente e il timestamp ISO. Definisci regole di sicurezza Firebase in modo che solo gli utenti coinvolti possano leggere o scrivere nelle rispettive conversazioni.
+
+### Regole di sicurezza consigliate
+
+Un set di regole di esempio per il Realtime Database potrebbe essere:
+
+```json
+{
+  "rules": {
+    "chats": {
+      "$threadId": {
+        ".read": "auth != null && (auth.uid == data.child('participants/user').val() || auth.uid == data.child('participants/company').val())",
+        ".write": "auth != null && (auth.uid == newData.child('participants/user').val() || auth.uid == newData.child('participants/company').val())"
+      }
+    },
+    "userChats": {
+      "$userId": {
+        ".read": "auth != null && auth.uid == $userId",
+        ".write": "auth != null && auth.uid == $userId"
+      }
+    },
+    "companyChats": {
+      "$companyId": {
+        ".read": "auth != null && auth.uid == $companyId",
+        ".write": "auth != null && auth.uid == $companyId"
+      }
+    }
+  }
+}
+```
+
+Adatta le condizioni alle tue esigenze (ad esempio consentendo l'accesso in lettura agli amministratori) e ricorda di proteggere anche i nodi `profiles` e `companies` in base ai permessi previsti dalla tua applicazione.
 
 ## Account demo
 
