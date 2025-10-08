@@ -245,6 +245,7 @@ class App {
         .map((review) => review && review.firebaseId)
         .filter(Boolean)
     );
+    this.pendingRegisterType = null;
   }
 
   generateCompanyId() {
@@ -313,6 +314,7 @@ class App {
         fallback.description ||
         'In attesa di descrizione dettagliata fornita dall\'impresa.',
       contactName: remoteCompany.contactName || fallback.contactName || '',
+      phone: remoteCompany.phone || fallback.phone || '',
       email: remoteCompany.email || fallback.email || '',
       vatNumber: remoteCompany.vatNumber || fallback.vatNumber || '',
       createdAt: remoteCompany.createdAt || fallback.createdAt || new Date().toISOString(),
@@ -579,36 +581,113 @@ class App {
         if (targetPage === 'login' && this.currentUser) {
           return;
         }
+        if (targetPage === 'register') {
+          const desiredType = element.getAttribute('data-register-type');
+          this.pendingRegisterType = desiredType || 'user';
+        }
         this.navigate(targetPage);
       });
     });
   }
 
   bindAuthForms() {
-    const userForm = document.getElementById('register-user-form');
-    if (userForm) {
-      userForm.addEventListener('submit', async (event) => {
-        event.preventDefault();
-        this.clearFormFeedback(userForm);
+    const registerForm = document.getElementById('register-account-form');
+    if (registerForm) {
+      const typeInputs = registerForm.querySelectorAll('input[name="accountType"]');
+      typeInputs.forEach((input) => {
+        input.addEventListener('change', () => {
+          this.setRegisterFormType(input.value);
+        });
+      });
 
-        const formData = new FormData(userForm);
+      const initialType =
+        registerForm.querySelector('input[name="accountType"]:checked')?.value || 'user';
+      this.setRegisterFormType(initialType);
+
+      registerForm.addEventListener('submit', async (event) => {
+        event.preventDefault();
+        this.clearFormFeedback(registerForm);
+
+        const formData = new FormData(registerForm);
+        const accountType = formData.get('accountType') === 'company' ? 'company' : 'user';
+
+        if (accountType === 'company') {
+          const values = {
+            companyName: (formData.get('companyName') || '').toString().trim(),
+            vatNumber: (formData.get('vatNumber') || '').toString().trim(),
+            region: (formData.get('region') || '').toString(),
+            province: (formData.get('province') || '').toString().trim(),
+            contactName: (formData.get('contactName') || '').toString().trim(),
+            email: (formData.get('email') || '').toString().trim(),
+            password: (formData.get('password') || '').toString(),
+            confirmPassword: (formData.get('confirmPassword') || '').toString(),
+            description: (formData.get('description') || '').toString().trim(),
+            phone: (formData.get('phone') || '').toString().trim()
+          };
+
+          if (
+            !values.companyName ||
+            !values.vatNumber ||
+            !values.region ||
+            !values.province ||
+            !values.contactName ||
+            !values.email
+          ) {
+            this.showFormFeedback(registerForm, 'error', 'Compila tutti i campi obbligatori.');
+            return;
+          }
+
+          if (values.password.length < 6) {
+            this.showFormFeedback(registerForm, 'error', 'La password deve contenere almeno 6 caratteri.');
+            return;
+          }
+
+          if (values.password !== values.confirmPassword) {
+            this.showFormFeedback(registerForm, 'error', 'Le password non coincidono.');
+            return;
+          }
+
+          const registration = await this.auth.registerCompany(values);
+
+          if (!registration.success) {
+            this.showFormFeedback(
+              registerForm,
+              'error',
+              this.getAuthErrorMessage(registration.error, registration.message)
+            );
+            return;
+          }
+
+          this.addPendingCompanyFromRemote(registration.company, values);
+          this.renderAdminDashboard();
+
+          registerForm.reset();
+          this.setRegisterFormType('company');
+          this.showFormFeedback(
+            registerForm,
+            'success',
+            'Richiesta inviata! Ti contatteremo appena la verifica documentale sarà completata.'
+          );
+          return;
+        }
+
         const fullName = (formData.get('fullName') || '').toString().trim();
         const email = (formData.get('email') || '').toString().trim();
         const password = (formData.get('password') || '').toString();
         const confirmPassword = (formData.get('confirmPassword') || '').toString();
 
         if (!fullName || !email || !password) {
-          this.showFormFeedback(userForm, 'error', 'Compila tutti i campi obbligatori.');
+          this.showFormFeedback(registerForm, 'error', 'Compila tutti i campi obbligatori.');
           return;
         }
 
         if (password.length < 6) {
-          this.showFormFeedback(userForm, 'error', 'La password deve contenere almeno 6 caratteri.');
+          this.showFormFeedback(registerForm, 'error', 'La password deve contenere almeno 6 caratteri.');
           return;
         }
 
         if (password !== confirmPassword) {
-          this.showFormFeedback(userForm, 'error', 'Le password non coincidono.');
+          this.showFormFeedback(registerForm, 'error', 'Le password non coincidono.');
           return;
         }
 
@@ -619,76 +698,17 @@ class App {
         });
 
         if (!result.success) {
-          this.showFormFeedback(userForm, 'error', this.getAuthErrorMessage(result.error, result.message));
+          this.showFormFeedback(registerForm, 'error', this.getAuthErrorMessage(result.error, result.message));
           return;
         }
 
-        userForm.reset();
-        this.showFormFeedback(userForm, 'success', 'Registrazione completata! Ora puoi accedere con le tue credenziali.');
+        registerForm.reset();
+        this.setRegisterFormType('user');
+        this.showFormFeedback(registerForm, 'success', 'Registrazione completata! Ora puoi accedere con le tue credenziali.');
         window.setTimeout(() => {
-          this.clearFormFeedback(userForm);
+          this.clearFormFeedback(registerForm);
           this.navigate('login');
         }, 1000);
-      });
-    }
-
-    const companyForm = document.getElementById('register-company-form');
-    if (companyForm) {
-      companyForm.addEventListener('submit', async (event) => {
-        event.preventDefault();
-        this.clearFormFeedback(companyForm);
-
-        const formData = new FormData(companyForm);
-        const values = {
-          companyName: (formData.get('companyName') || '').toString().trim(),
-          vatNumber: (formData.get('vatNumber') || '').toString().trim(),
-          region: (formData.get('region') || '').toString(),
-          province: (formData.get('province') || '').toString().trim(),
-          contactName: (formData.get('contactName') || '').toString().trim(),
-          email: (formData.get('email') || '').toString().trim(),
-          password: (formData.get('password') || '').toString(),
-          confirmPassword: (formData.get('confirmPassword') || '').toString(),
-          description: (formData.get('description') || '').toString()
-        };
-
-        if (
-          !values.companyName ||
-          !values.vatNumber ||
-          !values.region ||
-          !values.province ||
-          !values.contactName ||
-          !values.email
-        ) {
-          this.showFormFeedback(companyForm, 'error', 'Compila tutti i campi obbligatori.');
-          return;
-        }
-
-        if (values.password.length < 6) {
-          this.showFormFeedback(companyForm, 'error', 'La password deve contenere almeno 6 caratteri.');
-          return;
-        }
-
-        if (values.password !== values.confirmPassword) {
-          this.showFormFeedback(companyForm, 'error', 'Le password non coincidono.');
-          return;
-        }
-
-        const registration = await this.auth.registerCompany(values);
-
-        if (!registration.success) {
-          this.showFormFeedback(companyForm, 'error', this.getAuthErrorMessage(registration.error, registration.message));
-          return;
-        }
-
-        this.addPendingCompanyFromRemote(registration.company, values);
-        this.renderAdminDashboard();
-
-        companyForm.reset();
-        this.showFormFeedback(
-          companyForm,
-          'success',
-          'Richiesta inviata! Ti contatteremo appena la verifica documentale sarà completata.'
-        );
       });
     }
 
@@ -701,19 +721,13 @@ class App {
         const formData = new FormData(loginForm);
         const email = (formData.get('email') || '').toString().trim();
         const password = (formData.get('password') || '').toString();
-        const requestedRole = (formData.get('role') || 'auto').toString();
 
         if (!email || !password) {
           this.showFormFeedback(loginForm, 'error', 'Inserisci email e password per continuare.');
           return;
         }
 
-        const loginPayload = { email, password };
-        if (requestedRole && requestedRole !== 'auto') {
-          loginPayload.role = requestedRole;
-        }
-
-        const loginResult = await this.auth.login(loginPayload);
+        const loginResult = await this.auth.login({ email, password });
         if (!loginResult.success) {
           this.showFormFeedback(loginForm, 'error', this.getAuthErrorMessage(loginResult.error, loginResult.message));
           return;
@@ -736,6 +750,35 @@ class App {
         }, 800);
       });
     }
+  }
+
+  setRegisterFormType(type) {
+    const registerForm = document.getElementById('register-account-form');
+    if (!registerForm) return;
+
+    const normalizedType = type === 'company' ? 'company' : 'user';
+    registerForm.dataset.selectedType = normalizedType;
+
+    const options = registerForm.querySelectorAll('.register-type-option');
+    options.forEach((option) => {
+      const input = option.querySelector('input[name="accountType"]');
+      const isActive = input && input.value === normalizedType;
+      if (input) {
+        input.checked = Boolean(isActive);
+      }
+      option.classList.toggle('register-type-option--active', Boolean(isActive));
+    });
+
+    const fieldGroups = registerForm.querySelectorAll('[data-register-fields]');
+    fieldGroups.forEach((group) => {
+      const groupType = group.getAttribute('data-register-fields');
+      const isActive = groupType === normalizedType;
+      group.classList.toggle('hidden', !isActive);
+      const inputs = group.querySelectorAll('input, select, textarea');
+      inputs.forEach((field) => {
+        field.disabled = !isActive;
+      });
+    });
   }
 
   bindLogout() {
@@ -961,6 +1004,11 @@ class App {
       this.currentPage = pageId;
       if (pageId !== 'company-profile') {
         this.activeCompanyId = null;
+      }
+      if (pageId === 'register') {
+        const desiredType = this.pendingRegisterType || 'user';
+        this.setRegisterFormType(desiredType);
+        this.pendingRegisterType = null;
       }
     } else {
       console.error(`Page with id 'page-${pageId}' not found.`);

@@ -18,11 +18,11 @@
             <div class="hidden md:flex items-center space-x-6">
                 <a href="#" class="text-gray-600 hover:text-blue-600" data-page="home">Home</a>
                 <a href="#" class="text-gray-600 hover:text-blue-600" data-page="how-it-works">Come Funziona</a>
-                <a href="#" class="text-gray-600 hover:text-blue-600" data-page="register-company">Sei un'impresa?</a>
+                <a href="#" class="text-gray-600 hover:text-blue-600" data-page="register" data-register-type="company">Sei un'impresa?</a>
             </div>
             <div class="flex items-center space-x-4" id="auth-actions">
                 <button id="login-button" class="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50" data-page="login">Accedi</button>
-                <button id="register-user-button" class="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700" data-page="register-user">Registrati</button>
+                <button id="register-user-button" class="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700" data-page="register" data-register-type="user">Registrati</button>
                 <div id="user-menu" class="hidden items-center space-x-3">
                     <div class="text-right leading-tight">
                         <p id="user-menu-name" class="text-sm font-semibold text-gray-700"></p>
@@ -188,7 +188,7 @@
 
         <div id="page-login" class="page max-w-md mx-auto bg-white p-8 rounded-xl shadow-lg">
             <h1 class="text-3xl font-bold mb-2 text-center">Accedi alla piattaforma</h1>
-            <p class="text-gray-600 mb-6 text-center">Inserisci le tue credenziali per continuare.</p>
+            <p class="text-gray-600 mb-6 text-center">Inserisci email e password: riconosceremo automaticamente se sei un privato, un'impresa o un amministratore.</p>
             <form id="login-form" class="space-y-4">
                 <div class="form-feedback hidden" data-feedback="login"></div>
                 <div>
@@ -199,22 +199,13 @@
                     <label for="login-password" class="block text-sm font-medium">Password</label>
                     <input id="login-password" name="password" type="password" class="mt-1 w-full p-2 border rounded-md" required>
                 </div>
-                <div>
-                    <label for="login-role" class="block text-sm font-medium">Accedi come</label>
-                    <select id="login-role" name="role" class="mt-1 w-full p-2 border rounded-md">
-                        <option value="auto">Riconoscimento automatico</option>
-                        <option value="user">Utente</option>
-                        <option value="company">Impresa</option>
-                        <option value="admin">Admin</option>
-                    </select>
-                </div>
                 <button type="submit" class="w-full py-3 bg-blue-600 text-white font-semibold rounded-md hover:bg-blue-700">Accedi</button>
             </form>
             <p class="text-sm text-gray-600 mt-6 text-center">
                 Nuovo su Edilizia Verificata?
-                <a href="#" class="text-blue-600 hover:text-blue-700 font-medium" data-page="register-user">Crea un account utente</a>
+                <a href="#" class="text-blue-600 hover:text-blue-700 font-medium" data-page="register" data-register-type="user">Crea un account privato</a>
                 oppure
-                <a href="#" class="text-blue-600 hover:text-blue-700 font-medium" data-page="register-company">registra la tua impresa</a>.
+                <a href="#" class="text-blue-600 hover:text-blue-700 font-medium" data-page="register" data-register-type="company">registra la tua impresa</a>.
             </p>
             <div class="mt-6 p-4 bg-gray-50 rounded-lg text-sm text-gray-600">
                 <p class="font-semibold text-gray-700 mb-1">Suggerimento</p>
@@ -222,110 +213,138 @@
             </div>
         </div>
 
-        <div id="page-register-company" class="page max-w-2xl mx-auto bg-white p-8 rounded-xl shadow-lg">
-            <h1 class="text-3xl font-bold mb-2 text-center">Registra la tua Impresa</h1>
-            <p class="text-gray-600 mb-6 text-center">Entra a far parte del nostro network di professionisti verificati.</p>
-            <form id="register-company-form" class="space-y-4">
-                <div class="form-feedback hidden" data-feedback="register-company"></div>
-                <div>
-                    <label for="company-name" class="block text-sm font-medium">Ragione Sociale</label>
-                    <input id="company-name" name="companyName" type="text" class="mt-1 w-full p-2 border rounded-md" placeholder="La Tua Impresa S.R.L." required>
-                </div>
-                <div class="grid md:grid-cols-2 gap-4">
+        <div id="page-register" class="page max-w-3xl mx-auto bg-white p-8 rounded-xl shadow-lg">
+            <h1 class="text-3xl font-bold mb-2 text-center">Crea il tuo account</h1>
+            <p class="text-gray-600 mb-6 text-center">Seleziona la tipologia di profilo e inserisci tutte le informazioni richieste.</p>
+            <form id="register-account-form" class="space-y-6">
+                <div class="form-feedback hidden" data-feedback="register-account"></div>
+                <fieldset class="bg-slate-50 border border-slate-200 rounded-lg p-4">
+                    <legend class="text-sm font-semibold text-slate-600 px-2">Tipologia profilo</legend>
+                    <div class="mt-3 grid gap-3 md:grid-cols-2">
+                        <label class="register-type-option" data-register-option="user">
+                            <input type="radio" name="accountType" value="user" class="mt-1" checked>
+                            <span>
+                                <span class="block text-sm font-semibold text-slate-700">Privato</span>
+                                <span class="text-xs text-slate-500">Per proprietari di casa e committenti che cercano imprese affidabili.</span>
+                            </span>
+                        </label>
+                        <label class="register-type-option" data-register-option="company">
+                            <input type="radio" name="accountType" value="company" class="mt-1">
+                            <span>
+                                <span class="block text-sm font-semibold text-slate-700">Impresa</span>
+                                <span class="text-xs text-slate-500">Per aziende edili che desiderano essere verificate e ricevere contatti qualificati.</span>
+                            </span>
+                        </label>
+                    </div>
+                </fieldset>
+                <section data-register-fields="user" class="space-y-4">
+                    <div class="grid md:grid-cols-2 gap-4">
+                        <div>
+                            <label for="register-user-name" class="block text-sm font-medium">Nome e Cognome</label>
+                            <input id="register-user-name" name="fullName" type="text" class="mt-1 w-full p-2 border rounded-md" placeholder="Mario Rossi" required>
+                        </div>
+                        <div>
+                            <label for="register-user-email" class="block text-sm font-medium">Email</label>
+                            <input id="register-user-email" name="email" type="email" class="mt-1 w-full p-2 border rounded-md" placeholder="mario.rossi@email.com" required>
+                        </div>
+                    </div>
+                    <div class="grid md:grid-cols-2 gap-4">
+                        <div>
+                            <label for="register-user-password" class="block text-sm font-medium">Password</label>
+                            <input id="register-user-password" name="password" type="password" class="mt-1 w-full p-2 border rounded-md" minlength="6" required>
+                        </div>
+                        <div>
+                            <label for="register-user-password-confirm" class="block text-sm font-medium">Conferma Password</label>
+                            <input id="register-user-password-confirm" name="confirmPassword" type="password" class="mt-1 w-full p-2 border rounded-md" minlength="6" required>
+                        </div>
+                    </div>
+                </section>
+                <section data-register-fields="company" class="space-y-4 hidden">
                     <div>
-                        <label for="company-piva" class="block text-sm font-medium">Partita IVA</label>
-                        <input id="company-piva" name="vatNumber" type="text" class="mt-1 w-full p-2 border rounded-md" placeholder="IT12345678901" required>
+                        <label for="register-company-name" class="block text-sm font-medium">Ragione Sociale</label>
+                        <input id="register-company-name" name="companyName" type="text" class="mt-1 w-full p-2 border rounded-md" placeholder="La Tua Impresa S.R.L." required>
+                    </div>
+                    <div class="grid md:grid-cols-2 gap-4">
+                        <div>
+                            <label for="register-company-vat" class="block text-sm font-medium">Partita IVA</label>
+                            <input id="register-company-vat" name="vatNumber" type="text" class="mt-1 w-full p-2 border rounded-md" placeholder="IT12345678901" required>
+                        </div>
+                        <div>
+                            <label for="register-company-region" class="block text-sm font-medium">Regione Operativa</label>
+                            <select id="register-company-region" name="region" class="mt-1 w-full p-2 border rounded-md" required>
+                                <option value="">Seleziona una regione</option>
+                                <option>Abruzzo</option>
+                                <option>Basilicata</option>
+                                <option>Calabria</option>
+                                <option>Campania</option>
+                                <option>Emilia-Romagna</option>
+                                <option>Friuli-Venezia Giulia</option>
+                                <option>Lazio</option>
+                                <option>Liguria</option>
+                                <option>Lombardia</option>
+                                <option>Marche</option>
+                                <option>Molise</option>
+                                <option>Piemonte</option>
+                                <option>Puglia</option>
+                                <option>Sardegna</option>
+                                <option>Sicilia</option>
+                                <option>Toscana</option>
+                                <option>Trentino-Alto Adige</option>
+                                <option>Umbria</option>
+                                <option>Valle d'Aosta</option>
+                                <option>Veneto</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="grid md:grid-cols-2 gap-4">
+                        <div>
+                            <label for="register-company-province" class="block text-sm font-medium">Provincia o Comune</label>
+                            <input id="register-company-province" name="province" type="text" class="mt-1 w-full p-2 border rounded-md" placeholder="Milano" required>
+                        </div>
+                        <div>
+                            <label for="register-company-contact" class="block text-sm font-medium">Referente</label>
+                            <input id="register-company-contact" name="contactName" type="text" class="mt-1 w-full p-2 border rounded-md" placeholder="Mario Rossi" required>
+                        </div>
+                    </div>
+                    <div class="grid md:grid-cols-2 gap-4">
+                        <div>
+                            <label for="register-company-email" class="block text-sm font-medium">Email di Accesso</label>
+                            <input id="register-company-email" name="email" type="email" class="mt-1 w-full p-2 border rounded-md" placeholder="info@latuaimpresa.it" required>
+                        </div>
+                        <div>
+                            <label for="register-company-phone" class="block text-sm font-medium">Telefono (opzionale)</label>
+                            <input id="register-company-phone" name="phone" type="tel" class="mt-1 w-full p-2 border rounded-md" placeholder="02 1234567">
+                        </div>
+                    </div>
+                    <div class="grid md:grid-cols-2 gap-4">
+                        <div>
+                            <label for="register-company-password" class="block text-sm font-medium">Password</label>
+                            <input id="register-company-password" name="password" type="password" class="mt-1 w-full p-2 border rounded-md" minlength="6" required>
+                        </div>
+                        <div>
+                            <label for="register-company-password-confirm" class="block text-sm font-medium">Conferma Password</label>
+                            <input id="register-company-password-confirm" name="confirmPassword" type="password" class="mt-1 w-full p-2 border rounded-md" minlength="6" required>
+                        </div>
                     </div>
                     <div>
-                        <label for="company-region" class="block text-sm font-medium">Regione Operativa</label>
-                        <select id="company-region" name="region" class="mt-1 w-full p-2 border rounded-md" required>
-                            <option value="">Seleziona una regione</option>
-                            <option>Abruzzo</option>
-                            <option>Basilicata</option>
-                            <option>Calabria</option>
-                            <option>Campania</option>
-                            <option>Emilia-Romagna</option>
-                            <option>Friuli-Venezia Giulia</option>
-                            <option>Lazio</option>
-                            <option>Liguria</option>
-                            <option>Lombardia</option>
-                            <option>Marche</option>
-                            <option>Molise</option>
-                            <option>Piemonte</option>
-                            <option>Puglia</option>
-                            <option>Sardegna</option>
-                            <option>Sicilia</option>
-                            <option>Toscana</option>
-                            <option>Trentino-Alto Adige</option>
-                            <option>Umbria</option>
-                            <option>Valle d'Aosta</option>
-                            <option>Veneto</option>
-                        </select>
+                        <label for="register-company-description" class="block text-sm font-medium">Descrivi la tua impresa</label>
+                        <textarea id="register-company-description" name="description" class="mt-1 w-full p-2 border rounded-md" rows="4" placeholder="Parlaci delle tue specializzazioni e dei tuoi servizi principali."></textarea>
                     </div>
-                </div>
-                <div class="grid md:grid-cols-2 gap-4">
-                    <div>
-                        <label for="company-province" class="block text-sm font-medium">Provincia o Comune</label>
-                        <input id="company-province" name="province" type="text" class="mt-1 w-full p-2 border rounded-md" placeholder="Milano" required>
+                    <div class="grid md:grid-cols-2 gap-4">
+                        <div>
+                            <label class="block text-sm font-medium">Carica Visura Camerale (PDF)</label>
+                            <input type="file" class="mt-1 w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100" accept="application/pdf">
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium">Carica DURC (PDF)</label>
+                            <input type="file" class="mt-1 w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100" accept="application/pdf">
+                        </div>
                     </div>
-                    <div>
-                        <label for="company-contact" class="block text-sm font-medium">Referente</label>
-                        <input id="company-contact" name="contactName" type="text" class="mt-1 w-full p-2 border rounded-md" placeholder="Mario Rossi" required>
-                    </div>
-                </div>
-                <div>
-                    <label for="company-email" class="block text-sm font-medium">Email di Accesso</label>
-                    <input id="company-email" name="email" type="email" class="mt-1 w-full p-2 border rounded-md" placeholder="info@latuaimpresa.it" required>
-                </div>
-                <div class="grid md:grid-cols-2 gap-4">
-                    <div>
-                        <label for="company-password" class="block text-sm font-medium">Password</label>
-                        <input id="company-password" name="password" type="password" class="mt-1 w-full p-2 border rounded-md" minlength="6" required>
-                    </div>
-                    <div>
-                        <label for="company-password-confirm" class="block text-sm font-medium">Conferma Password</label>
-                        <input id="company-password-confirm" name="confirmPassword" type="password" class="mt-1 w-full p-2 border rounded-md" minlength="6" required>
-                    </div>
-                </div>
-                <div>
-                    <label for="company-description" class="block text-sm font-medium">Descrivi la tua impresa</label>
-                    <textarea id="company-description" name="description" class="mt-1 w-full p-2 border rounded-md" rows="4" placeholder="Parlaci delle tue specializzazioni e dei tuoi servizi principali."></textarea>
-                </div>
-                <div>
-                    <label class="block text-sm font-medium">Carica Visura Camerale (PDF)</label>
-                    <input type="file" class="mt-1 w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100" accept="application/pdf">
-                </div>
-                <div>
-                    <label class="block text-sm font-medium">Carica DURC (PDF)</label>
-                    <input type="file" class="mt-1 w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100" accept="application/pdf">
-                </div>
-                <button type="submit" class="w-full py-3 bg-blue-600 text-white font-semibold rounded-md hover:bg-blue-700">Invia per la Verifica</button>
-            </form>
-        </div>
-
-        <div id="page-register-user" class="page max-w-md mx-auto bg-white p-8 rounded-xl shadow-lg">
-            <h1 class="text-3xl font-bold mb-6 text-center">Crea un Account</h1>
-            <form id="register-user-form" class="space-y-4">
-                <div class="form-feedback hidden" data-feedback="register-user"></div>
-                <div>
-                    <label for="user-name" class="block text-sm font-medium">Nome e Cognome</label>
-                    <input id="user-name" name="fullName" type="text" class="mt-1 w-full p-2 border rounded-md" placeholder="Mario Rossi" required>
-                </div>
-                <div>
-                    <label for="user-email" class="block text-sm font-medium">Email</label>
-                    <input id="user-email" name="email" type="email" class="mt-1 w-full p-2 border rounded-md" placeholder="mario.rossi@email.com" required>
-                </div>
-                <div>
-                    <label for="user-password" class="block text-sm font-medium">Password</label>
-                    <input id="user-password" name="password" type="password" class="mt-1 w-full p-2 border rounded-md" minlength="6" required>
-                </div>
-                <div>
-                    <label for="user-password-confirm" class="block text-sm font-medium">Conferma Password</label>
-                    <input id="user-password-confirm" name="confirmPassword" type="password" class="mt-1 w-full p-2 border rounded-md" minlength="6" required>
-                </div>
-                <button type="submit" class="w-full py-3 bg-blue-600 text-white font-semibold rounded-md hover:bg-blue-700">Registrati</button>
+                </section>
+                <button type="submit" class="w-full py-3 bg-blue-600 text-white font-semibold rounded-md hover:bg-blue-700">Completa registrazione</button>
             </form>
             <p class="text-xs text-gray-600 mt-4 text-center">Registrandoti accetti i nostri termini di servizio e l'informativa sulla privacy.</p>
+            <p class="text-sm text-gray-600 mt-4 text-center">Hai già un account? <a href="#" class="text-blue-600 hover:text-blue-700 font-medium" data-page="login">Accedi alla piattaforma</a>.</p>
         </div>
 
         <div id="page-how-it-works" class="page max-w-4xl mx-auto bg-white p-8 rounded-xl shadow-lg">
@@ -375,13 +394,13 @@
                     <ul class="text-gray-400 text-sm space-y-2">
                         <li><a href="#" class="hover:text-white" data-page="home">Cerca Imprese</a></li>
                         <li><a href="#" class="hover:text-white" data-page="how-it-works">Come Funziona</a></li>
-                        <li><a href="#" class="hover:text-white" data-page="register-user">Registrati</a></li>
+                        <li><a href="#" class="hover:text-white" data-page="register" data-register-type="user">Registrati</a></li>
                     </ul>
                 </div>
                 <div>
                     <h3 class="font-semibold mb-2">Per le Imprese</h3>
                     <ul class="text-gray-400 text-sm space-y-2">
-                        <li><a href="#" class="hover:text-white" data-page="register-company">Iscrivi la tua azienda</a></li>
+                        <li><a href="#" class="hover:text-white" data-page="register" data-register-type="company">Iscrivi la tua azienda</a></li>
                         <li><a href="#" class="hover:text-white">Linee Guida</a></li>
                     </ul>
                 </div>

@@ -39,8 +39,9 @@ All'avvio l'interfaccia richiede al server il contenuto della route `GET /api/pu
 - Sezione amministratore con elenco di imprese e recensioni da moderare (demo statica lato client).
 - Form per lasciare una recensione con interazione sulle stelle (demo, non salva i dati).
 - Registrazione e accesso per utenti, imprese e amministratori mediante Firebase Authentication con salvataggio dei profili nel Realtime Database.
+- Un unico form di registrazione che guida la scelta tra profilo privato e impresa, mostrando i campi necessari per ciascuna tipologia.
 
 ## Account demo
 
-- Gli account creati tramite i form di registrazione vengono memorizzati in Firebase e possono essere utilizzati per accedere dalla schermata "Accedi". Il ruolo viene rilevato automaticamente durante il login, quindi non è necessario selezionarlo manualmente a meno che tu non voglia forzare un contesto specifico.
+- Gli account creati tramite i form di registrazione vengono memorizzati in Firebase e possono essere utilizzati per accedere dalla schermata "Accedi". Il ruolo viene rilevato automaticamente durante il login partendo dalla mail fornita, quindi è sufficiente inserire credenziali corrette senza ulteriori selezioni.
 - Per l'accesso amministratore crea manualmente un utente in Firebase Authentication, aggiungilo al nodo `admins` del Realtime Database e utilizza le credenziali corrispondenti nel form di login.

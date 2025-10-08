@@ -395,6 +395,7 @@ async function handleRegisterCompany(body) {
     region: body.region,
     province: body.province,
     contactName: body.contactName,
+    phone: body.phone || '',
     description: body.description || '',
     status: 'pending',
     createdAt: new Date().toISOString()
