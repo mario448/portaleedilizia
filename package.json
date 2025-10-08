@@ -1,0 +1,18 @@
+{
+  "name": "portaleedilizia",
+  "version": "1.0.0",
+  "description": "Portale di ricerca per imprese edili verificate",
+  "main": "server.js",
+  "type": "commonjs",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node server.js"
+  },
+  "keywords": [
+    "edilizia",
+    "verifica",
+    "imprese"
+  ],
+  "author": "",
+  "license": "MIT"
+}
