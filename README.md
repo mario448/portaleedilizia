@@ -42,5 +42,5 @@ All'avvio l'interfaccia richiede al server il contenuto della route `GET /api/pu
 
 ## Account demo
 
-- Gli account creati tramite i form di registrazione vengono memorizzati in Firebase e possono essere utilizzati per accedere dalla schermata "Accedi".
+- Gli account creati tramite i form di registrazione vengono memorizzati in Firebase e possono essere utilizzati per accedere dalla schermata "Accedi". Il ruolo viene rilevato automaticamente durante il login, quindi non è necessario selezionarlo manualmente a meno che tu non voglia forzare un contesto specifico.
 - Per l'accesso amministratore crea manualmente un utente in Firebase Authentication, aggiungilo al nodo `admins` del Realtime Database e utilizza le credenziali corrispondenti nel form di login.

@@ -701,14 +701,19 @@ class App {
         const formData = new FormData(loginForm);
         const email = (formData.get('email') || '').toString().trim();
         const password = (formData.get('password') || '').toString();
-        const role = (formData.get('role') || 'user').toString();
+        const requestedRole = (formData.get('role') || 'auto').toString();
 
         if (!email || !password) {
           this.showFormFeedback(loginForm, 'error', 'Inserisci email e password per continuare.');
           return;
         }
 
-        const loginResult = await this.auth.login({ email, password, role });
+        const loginPayload = { email, password };
+        if (requestedRole && requestedRole !== 'auto') {
+          loginPayload.role = requestedRole;
+        }
+
+        const loginResult = await this.auth.login(loginPayload);
         if (!loginResult.success) {
           this.showFormFeedback(loginForm, 'error', this.getAuthErrorMessage(loginResult.error, loginResult.message));
           return;
@@ -724,7 +729,7 @@ class App {
           4000
         );
 
-        const destination = role === 'admin' ? 'admin-dashboard' : 'home';
+        const destination = this.currentUser.role === 'admin' ? 'admin-dashboard' : 'home';
         window.setTimeout(() => {
           this.clearFormFeedback(loginForm);
           this.navigate(destination);
@@ -866,7 +871,7 @@ class App {
       case 'INVALID_LOGIN_CREDENTIALS':
       case 'INVALID_CREDENTIALS':
       case 'EMAIL_NOT_FOUND':
-        return 'Credenziali non valide. Verifica email, password e ruolo selezionato.';
+        return 'Credenziali non valide. Verifica email e password.';
       case 'USER_DISABLED':
         return 'Questo account è stato disabilitato. Contatta il supporto per maggiori informazioni.';
       case 'MISSING_FIELDS':
@@ -876,7 +881,7 @@ class App {
       case 'FIREBASE_CONFIG_MISSING':
         return 'Configurazione Firebase assente. Verifica le variabili d\'ambiente del server.';
       case 'PROFILE_NOT_FOUND':
-        return 'Il profilo non è disponibile per il ruolo selezionato.';
+        return 'Non è stato possibile individuare un profilo associato a queste credenziali.';
       case 'REQUEST_FAILED':
         return fallbackMessage || 'Impossibile completare la richiesta. Riprova più tardi.';
       default:

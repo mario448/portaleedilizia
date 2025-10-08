@@ -43,6 +43,7 @@ const FIREBASE_SERVICE_EMAIL = process.env.FIREBASE_SERVICE_EMAIL || '';
 const FIREBASE_SERVICE_PASSWORD = process.env.FIREBASE_SERVICE_PASSWORD || '';
 
 const SERVICE_TOKEN_EXPIRY_GUARD_SECONDS = 60;
+const SUPPORTED_ROLES = ['user', 'company', 'admin'];
 
 let serviceSession = null;
 
@@ -77,6 +78,10 @@ class FirebaseError extends ApiError {
 function sendJson(res, status, payload) {
   res.writeHead(status, { 'Content-Type': 'application/json; charset=utf-8' });
   res.end(JSON.stringify(payload));
+}
+
+function isEmptyObject(value) {
+  return typeof value === 'object' && value !== null && Object.keys(value).length === 0;
 }
 
 function sendFile(res, filePath) {
@@ -258,6 +263,85 @@ function buildUserAccountResponse({ localId, email, displayName, role, idToken, 
   };
 }
 
+function normalizeRole(role) {
+  if (!role || typeof role !== 'string') {
+    return null;
+  }
+
+  const normalized = role.trim().toLowerCase();
+  return SUPPORTED_ROLES.includes(normalized) ? normalized : null;
+}
+
+function getResourcePathForRole(role, localId) {
+  if (!localId) {
+    return null;
+  }
+
+  switch (role) {
+    case 'user':
+      return `/profiles/${localId}.json`;
+    case 'company':
+      return `/companies/${localId}.json`;
+    case 'admin':
+      return `/admins/${localId}.json`;
+    default:
+      return null;
+  }
+}
+
+async function tryFetchProfileForRole(role, localId, idToken) {
+  const resourcePath = getResourcePathForRole(role, localId);
+  if (!resourcePath) {
+    return null;
+  }
+
+  try {
+    const profile = await firebaseDatabaseRequest('GET', resourcePath, idToken);
+
+    if (profile === null || profile === undefined || isEmptyObject(profile)) {
+      return null;
+    }
+
+    return profile;
+  } catch (error) {
+    if (error instanceof FirebaseError) {
+      if (error.status === 401 || error.status === 403) {
+        throw new ApiError('Accesso ai dati non autorizzato per questo account.', error.status, error.code);
+      }
+
+      if (error.status === 404) {
+        return null;
+      }
+    }
+
+    throw error;
+  }
+}
+
+async function resolveAccountProfile(localId, idToken, preferredRole) {
+  const normalizedPreferredRole = normalizeRole(preferredRole);
+  const rolesToTry = [];
+
+  if (normalizedPreferredRole) {
+    rolesToTry.push(normalizedPreferredRole);
+  }
+
+  SUPPORTED_ROLES.forEach((role) => {
+    if (!rolesToTry.includes(role)) {
+      rolesToTry.push(role);
+    }
+  });
+
+  for (const role of rolesToTry) {
+    const profile = await tryFetchProfileForRole(role, localId, idToken);
+    if (profile) {
+      return { role, profile };
+    }
+  }
+
+  throw new ApiError('Profilo non trovato per questo account.', 403, 'PROFILE_NOT_FOUND');
+}
+
 async function handleRegisterUser(body) {
   const { fullName, email, password } = body;
   if (!fullName || !email || !password) {
@@ -327,33 +411,9 @@ async function handleRegisterCompany(body) {
   };
 }
 
-async function fetchProfileForRole(role, localId, idToken) {
-  let resourcePath = null;
-  if (role === 'user') {
-    resourcePath = `/profiles/${localId}.json`;
-  } else if (role === 'company') {
-    resourcePath = `/companies/${localId}.json`;
-  } else if (role === 'admin') {
-    resourcePath = `/admins/${localId}.json`;
-  }
-
-  if (!resourcePath) {
-    throw new ApiError('Ruolo non supportato.', 400, 'UNSUPPORTED_ROLE');
-  }
-
-  const profile = await firebaseDatabaseRequest('GET', resourcePath, idToken);
-  const isEmptyObject = typeof profile === 'object' && profile !== null && Object.keys(profile).length === 0;
-
-  if (profile === null || profile === undefined || isEmptyObject) {
-    throw new ApiError('Profilo non trovato per il ruolo selezionato.', 403, 'PROFILE_NOT_FOUND');
-  }
-
-  return profile;
-}
-
 async function handleLogin(body) {
   const { email, password, role } = body;
-  if (!email || !password || !role) {
+  if (!email || !password) {
     throw new ApiError('Compila tutti i campi obbligatori.', 400, 'MISSING_FIELDS');
   }
 
@@ -363,7 +423,7 @@ async function handleLogin(body) {
     returnSecureToken: true
   });
 
-  const profile = await fetchProfileForRole(role, authData.localId, authData.idToken);
+  const { role: resolvedRole, profile } = await resolveAccountProfile(authData.localId, authData.idToken, role);
 
   const displayName =
     profile.fullName || profile.companyName || profile.displayName || authData.displayName || email;
@@ -374,12 +434,12 @@ async function handleLogin(body) {
       localId: authData.localId,
       email: profile.email || email,
       displayName,
-      role,
+      role: resolvedRole,
       idToken: authData.idToken,
       refreshToken: authData.refreshToken,
       expiresIn: authData.expiresIn
     }),
-    profile
+    profile: { ...profile, role: resolvedRole }
   };
 }
 
@@ -417,6 +477,7 @@ function mapCompaniesFromFirebase(snapshot) {
       firebaseId,
       name: value.companyName || value.name || 'Impresa registrata',
       companyName: value.companyName || value.name || 'Impresa registrata',
+      role: 'company',
       region: value.region || '',
       province: value.province || '',
       rating: Number.isFinite(ratingValue) ? Number(ratingValue.toFixed(1)) : 0,
